@@ -40,6 +40,19 @@ describe("annotation proposals state machine", function () {
     assert.isTrue(hasPendingBatch("conv1"));
   });
 
+  it("preserves failed proposal inputs as non-actionable", function () {
+    const batch = createBatch("conv1", 3, [
+      {
+        ...SAMPLE,
+        status: "failed",
+        errorMessage: "Could not locate text.",
+      },
+    ]);
+    assert.equal(batch.proposals[0].status, "failed");
+    assert.isFalse(hasPendingBatch("conv1"));
+    assert.lengthOf(acceptAllPending("conv1"), 0);
+  });
+
   it("groups approval by operation and annotation type", function () {
     const batch = createBatch("conv1", 3, [SAMPLE]);
     assert.equal(

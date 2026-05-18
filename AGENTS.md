@@ -174,6 +174,12 @@ Current tool behavior:
 - If a model emits PDF read actions such as `read_pdf` or `list_annotations`, Zotero-Cat executes them only when PDF tools are enabled and sends one follow-up request with the tool result.
 - If a model says it will call/read/search/annotate but omits a machine-readable action, Zotero-Cat first infers safe read-only PDF/list-annotation actions when obvious, and otherwise performs one repair follow-up asking for an executable action instead of silently stopping. `read_pdf` supports page-scoped reads through fields such as `page`, `fromPage`, and `toPage`.
 - If a model emits PDF write actions such as `propose_annotation`, `modify_annotation`, or `delete_annotation`, Zotero-Cat converts them into proposal batches. Accepted proposals are applied through `Zotero.Annotations.saveFromJSON` or `Zotero.Item.eraseTx`.
+- PDF read results include `attachmentKey` and `attachmentID`. In multi-PDF items, write actions must specify a target attachment or resolve from an existing annotation key; do not silently write to the first attachment.
+- Explicit page-scoped PDF reads must not fall back to unscoped Zotero indexed full text. If requested pages cannot be selected or have no extractable text, return an actionable tool error.
+- Explicit page hints for highlight/underline matching are strict. Do not search other pages after the requested page fails, because that creates plausible but wrong highlights.
+- Annotation update/delete must verify that the target annotation belongs to the selected PDF attachment before mutation.
+- Failed annotation proposals remain failed and non-actionable. Do not turn failed proposal inputs into pending cards.
+- “Always allow” annotation approval is scoped to the current conversation and attachment as well as operation/type; do not make it global across items or PDFs.
 - Tool execution is owned by Zotero-Cat, not by provider-native function calling, so OpenAI-compatible gateways behave consistently.
 - Do not migrate wholesale to LangChain or LangGraph inside the Zotero plugin unless the complexity clearly justifies the dependency and runtime cost. Instead, evolve the internal tool runtime with LangGraph-style ideas: explicit state transitions, resumable steps where needed, deterministic tool ownership, and human-confirmation checkpoints before user-visible document changes.
 

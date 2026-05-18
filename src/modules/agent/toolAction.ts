@@ -52,7 +52,7 @@ export function parseAssistantToolActions(content: string): ToolAction[] {
     if (!action) {
       continue;
     }
-    const fingerprint = `${action.type}::${action.query}`;
+    const fingerprint = buildToolActionFingerprint(action);
     if (seen.has(fingerprint)) {
       continue;
     }
@@ -63,6 +63,23 @@ export function parseAssistantToolActions(content: string): ToolAction[] {
     }
   }
   return actions;
+}
+
+function buildToolActionFingerprint(action: ToolAction): string {
+  return `${action.type}::${action.query}::${stableStringify(action.rawInput)}`;
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+  }
+  if (isRecord(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "undefined";
 }
 
 export function parseFirstAssistantToolAction(

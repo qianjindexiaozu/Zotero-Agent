@@ -41,6 +41,13 @@ export interface AnnotationBatch {
   proposals: AnnotationProposal[];
 }
 
+export type AnnotationProposalInput = Omit<
+  AnnotationProposal,
+  "id" | "status" | "createdAt"
+> & {
+  status?: AnnotationProposalStatus;
+};
+
 export interface BatchSummary {
   accepted: number;
   rejected: number;
@@ -114,7 +121,7 @@ export function getPendingApprovalKeys(batch: AnnotationBatch): string[] {
 export function createBatch(
   conversationKey: string,
   assistantMessageIndex: number,
-  proposals: Omit<AnnotationProposal, "id" | "status" | "createdAt">[],
+  proposals: AnnotationProposalInput[],
 ): AnnotationBatch {
   const capped = proposals.slice(0, MAX_PROPOSALS_PER_BATCH);
   const now = Date.now();
@@ -126,7 +133,7 @@ export function createBatch(
     proposals: capped.map((input, index) => ({
       ...input,
       id: `prop-${now.toString(36)}-${index}`,
-      status: "pending",
+      status: input.status || "pending",
       createdAt: now,
     })),
   };
@@ -138,7 +145,7 @@ export function createBatch(
 export function addProposals(
   conversationKey: string,
   assistantMessageIndex: number,
-  proposals: Omit<AnnotationProposal, "id" | "status" | "createdAt">[],
+  proposals: AnnotationProposalInput[],
 ): AnnotationBatch {
   const existing = batchesByConversation.get(conversationKey);
   if (
@@ -156,7 +163,7 @@ export function addProposals(
   const appended = proposals.slice(0, remainingSlots).map((input, index) => ({
     ...input,
     id: `prop-${now.toString(36)}-${existing.proposals.length + index}`,
-    status: "pending" as AnnotationProposalStatus,
+    status: input.status || ("pending" as AnnotationProposalStatus),
     createdAt: now,
   }));
   existing.proposals.push(...appended);

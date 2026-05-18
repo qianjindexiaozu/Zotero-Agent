@@ -68,6 +68,12 @@ export async function updateAnnotation(
     if (!existing || !existing.isAnnotation?.()) {
       return { success: false, error: "Target annotation does not exist." };
     }
+    if (!isAnnotationOnAttachment(existing, attachment)) {
+      return {
+        success: false,
+        error: "Target annotation does not belong to this PDF attachment.",
+      };
+    }
     const json = buildAnnotationJSON(resolved, attachment);
     json.key = resolved.key;
     await Zotero.Annotations.saveFromJSON(attachment, json);
@@ -92,10 +98,44 @@ export async function deleteAnnotation(
     if (!existing || !existing.isAnnotation?.()) {
       return { success: false, error: "Target annotation does not exist." };
     }
+    if (!isAnnotationOnAttachment(existing, attachment)) {
+      return {
+        success: false,
+        error: "Target annotation does not belong to this PDF attachment.",
+      };
+    }
     await existing.eraseTx();
     return { success: true, annotationKey };
   } catch (error) {
     return { success: false, error: formatError(error) };
+  }
+}
+
+function isAnnotationOnAttachment(
+  annotation: Zotero.Item,
+  attachment: Zotero.Item,
+): boolean {
+  if (annotation.libraryID !== attachment.libraryID) {
+    return false;
+  }
+  const annotationParentID = (
+    annotation as unknown as { parentID?: number | false }
+  ).parentID;
+  if (annotationParentID === attachment.id) {
+    return true;
+  }
+  const annotationParentKey = (
+    annotation as unknown as { parentKey?: string | false }
+  ).parentKey;
+  if (annotationParentKey && annotationParentKey === attachment.key) {
+    return true;
+  }
+  try {
+    return (attachment.getAnnotations?.(false) || []).some(
+      (candidate) => candidate.key === annotation.key,
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -419,6 +459,7 @@ export const pdfAnnotationsTestUtils = {
   buildAnnotationJSON,
   buildSortIndex,
   generateAnnotationKey,
+  isAnnotationOnAttachment,
   normalizeAnnotationRects,
   normalizeColor,
 };

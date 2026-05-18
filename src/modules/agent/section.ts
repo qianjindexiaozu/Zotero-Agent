@@ -71,7 +71,7 @@ import {
   clearBatch,
   createBatch,
   getBatchForConversation,
-  getPendingApprovalKeys,
+  getProposalApprovalKey,
   hasPendingBatch,
   rejectAllPending,
   setProposalStatus,
@@ -1232,7 +1232,19 @@ async function continueAfterAssistantToolAction(
     return;
   }
 
-  if (writeActions.length && item && isPdfToolsEnabledPref()) {
+  if (writeActions.length && (!item || !isPdfToolsEnabledPref())) {
+    const eventIndex = appendToolEventMessage(
+      conversationKey,
+      "propose-annotation",
+    );
+    markToolEventFailed(
+      conversationKey,
+      eventIndex,
+      getString("agent-tool-write-unavailable"),
+    );
+    saveConversationStore();
+    await refreshAllSections();
+  } else if (writeActions.length && item && isPdfToolsEnabledPref()) {
     const eventIndex = appendToolEventMessage(
       conversationKey,
       "propose-annotation",
@@ -1331,22 +1343,35 @@ function stripToolActionJSON(content: string): string {
 }
 
 function shouldAutoApplyAnnotationBatch(batch: AnnotationBatch): boolean {
+  const approvalKeys = getScopedPendingApprovalKeys(batch);
+  if (!approvalKeys.length) {
+    return false;
+  }
   if (isPdfToolsAutoApplyPref()) {
     return true;
   }
-  const approvalKeys = getPendingApprovalKeys(batch);
-  return (
-    approvalKeys.length > 0 &&
-    approvalKeys.every((key) =>
-      runtime.approvedAnnotationOperationKeys.has(key),
-    )
+  return approvalKeys.every((key) =>
+    runtime.approvedAnnotationOperationKeys.has(key),
   );
 }
 
 function rememberAnnotationOperationApprovals(batch: AnnotationBatch): void {
-  for (const key of getPendingApprovalKeys(batch)) {
+  for (const key of getScopedPendingApprovalKeys(batch)) {
     runtime.approvedAnnotationOperationKeys.add(key);
   }
+}
+
+function getScopedPendingApprovalKeys(batch: AnnotationBatch): string[] {
+  const keys = new Set<string>();
+  for (const proposal of batch.proposals) {
+    if (proposal.status !== "pending") {
+      continue;
+    }
+    keys.add(
+      `${batch.conversationKey}:${proposal.attachmentKey}:${getProposalApprovalKey(proposal)}`,
+    );
+  }
+  return [...keys].sort();
 }
 
 async function maybeApplyResolvedBatch(conversationKey: string): Promise<void> {

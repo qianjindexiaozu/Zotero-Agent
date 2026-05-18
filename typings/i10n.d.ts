@@ -95,6 +95,7 @@ export type FluentMessageId =
   | 'agent-tool-running-pdf'
   | 'agent-tool-running-proposals'
   | 'agent-tool-running-web-search'
+  | 'agent-tool-write-unavailable'
   | 'agent-waiting-label'
   | 'agent-web-search-action-continuing'
   | 'agent-web-search-action-disabled'

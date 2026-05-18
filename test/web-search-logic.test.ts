@@ -3,6 +3,7 @@ import {
   executeToolAction,
   inferAssistantReadOnlyToolAction,
   looksLikeAssistantToolIntent,
+  parseAssistantToolActions,
   parseAssistantToolAction,
   registerToolActionHandler,
   stripAssistantToolActionMarkup,
@@ -79,6 +80,23 @@ registerToolActionHandler({
   aliases: ["list_annotations", "list annotations", "list-annotations"],
   extractQuery() {
     return "__all__";
+  },
+  isAvailable() {
+    return true;
+  },
+  async execute() {
+    return "";
+  },
+});
+
+registerToolActionHandler({
+  type: "propose-annotation",
+  readOnly: false,
+  aliases: ["propose_annotation"],
+  extractQuery(actionInput) {
+    return typeof actionInput.text === "string"
+      ? actionInput.text.trim()
+      : "propose-annotation";
   },
   isAvailable() {
     return true;
@@ -325,5 +343,22 @@ describe("web search logic", function () {
     );
     assert.match(result, /^ERROR:/);
     assert.include(result, "disabled-test-tool");
+  });
+
+  it("should keep repeated tool actions when raw inputs differ", function () {
+    const actions = parseAssistantToolActions(`
+[
+  {"action":"propose_annotation","action_input":{"text":"shared phrase","page":1,"color":"#ffd400"}},
+  {"action":"propose_annotation","action_input":{"text":"shared phrase","page":2,"color":"#ff6666"}}
+]
+`);
+    assert.lengthOf(actions, 2);
+    assert.deepEqual(
+      actions.map((action) => action.rawInput),
+      [
+        { text: "shared phrase", page: 1, color: "#ffd400" },
+        { text: "shared phrase", page: 2, color: "#ff6666" },
+      ],
+    );
   });
 });

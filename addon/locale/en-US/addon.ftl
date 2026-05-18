@@ -47,6 +47,7 @@ agent-tool-event-failed-proposals = Annotation proposal step failed
 agent-tool-event-failed-applying = Failed to apply annotations
 agent-tool-event-failed-generic = Tool failed
 agent-tool-event-elapsed = Elapsed { $seconds }s
+agent-tool-write-unavailable = PDF tools are disabled or no active Zotero item is available.
 agent-pdf-tools-toggle = PDF tools
 agent-pdf-tools-auto-apply = Always approve and apply annotation proposals
 agent-input-placeholder = Ask Zotero-Cat...

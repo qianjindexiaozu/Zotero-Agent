@@ -47,6 +47,7 @@ agent-tool-event-failed-proposals = 标注提议环节失败
 agent-tool-event-failed-applying = 应用标注失败
 agent-tool-event-failed-generic = 工具执行失败
 agent-tool-event-elapsed = 耗时 { $seconds }s
+agent-tool-write-unavailable = PDF 工具未开启，或当前没有可用的 Zotero 条目。
 agent-pdf-tools-toggle = PDF 工具
 agent-pdf-tools-auto-apply = 总是批准并应用标注提议
 agent-input-placeholder = 向 Zotero-Cat 提问...

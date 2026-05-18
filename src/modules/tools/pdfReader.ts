@@ -68,6 +68,10 @@ export interface ResolvedRects {
   matchedText: string;
 }
 
+export interface FindTextRectsOptions {
+  strictPage?: boolean;
+}
+
 const SEARCH_WINDOW_PAGES = 2;
 
 let pdfjsModule: PdfJsModule | null = null;
@@ -410,6 +414,7 @@ export function findTextRects(
   pages: ExtractedPage[],
   targetPageIndex: number | null | undefined,
   query: string,
+  options: FindTextRectsOptions = {},
 ): ResolvedRects | null {
   const normalizedQuery = normalizeQuery(query);
   if (!normalizedQuery) {
@@ -432,7 +437,9 @@ export function findTextRects(
     }
     return found;
   }
-  const candidateOrder = buildSearchOrder(pages, targetPageIndex);
+  const candidateOrder = options.strictPage
+    ? pages.filter((page) => page.pageIndex === targetPageIndex)
+    : buildSearchOrder(pages, targetPageIndex);
   for (const page of candidateOrder) {
     const match = matchPage(page, normalizedQuery);
     if (match) {

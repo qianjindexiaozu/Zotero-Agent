@@ -93,6 +93,33 @@ describe("pdf tools logic", function () {
       assert.deepEqual(order, [2, 1, 3, 0, 4]);
     });
 
+    it("constrains text matching to an explicit target page", function () {
+      const pages = [0, 1].map((index) =>
+        makePage(index, 800, [
+          {
+            text: index === 0 ? "target page text" : "shared phrase",
+            x: 0,
+            y: 100,
+            width: 90,
+            height: 10,
+          },
+        ]),
+      );
+      const looseMatch = pdfReaderTestUtils.findTextRects(
+        pages,
+        0,
+        "shared phrase",
+      );
+      assert.equal(looseMatch?.pageIndex, 1);
+      const strictMatch = pdfReaderTestUtils.findTextRects(
+        pages,
+        0,
+        "shared phrase",
+        { strictPage: true },
+      );
+      assert.isNull(strictMatch);
+    });
+
     it("merges rects on the same visual line", function () {
       const spans = [
         { text: "abc", x: 10, y: 200, width: 15, height: 10 },
@@ -230,6 +257,59 @@ describe("pdf tools logic", function () {
       assert.deepEqual(
         selected.map((page) => page.pageLabel),
         ["4", "5"],
+      );
+    });
+
+    it("rejects explicit page ranges without extractable selected text", function () {
+      const pages = [makePage(0, 800, [])];
+      assert.throws(
+        () =>
+          annotationToolsTestUtils.renderSelectedReadPdfPages(pages, {
+            explicitRange: true,
+            fromIndex: 0,
+            toIndex: 0,
+          }),
+        /produced no extractable text/,
+      );
+    });
+  });
+
+  describe("pdf annotation ownership", function () {
+    it("accepts annotations owned by the target attachment", function () {
+      const attachment = {
+        id: 10,
+        key: "ATTACH1",
+        libraryID: 1,
+      } as Zotero.Item;
+      const annotation = {
+        key: "ANN1",
+        libraryID: 1,
+        parentID: 10,
+      } as Zotero.Item;
+      assert.isTrue(
+        pdfAnnotationsTestUtils.isAnnotationOnAttachment(
+          annotation,
+          attachment,
+        ),
+      );
+    });
+
+    it("rejects annotations from another attachment", function () {
+      const attachment = {
+        id: 10,
+        key: "ATTACH1",
+        libraryID: 1,
+      } as Zotero.Item;
+      const annotation = {
+        key: "ANN1",
+        libraryID: 1,
+        parentID: 20,
+      } as Zotero.Item;
+      assert.isFalse(
+        pdfAnnotationsTestUtils.isAnnotationOnAttachment(
+          annotation,
+          attachment,
+        ),
       );
     });
   });

@@ -10,7 +10,7 @@ import {
   type ToolAction,
   type ToolActionHandler,
 } from "./toolAction";
-import type { AnnotationProposal } from "./annotationProposals";
+import type { AnnotationProposalInput } from "./annotationProposals";
 import {
   extractPages,
   findTextRects,
@@ -34,8 +34,7 @@ async function readAttachmentText(
 ): Promise<string> {
   try {
     const pages = await extractPages(attachment);
-    const selectedPages = selectReadPdfPages(pages, request);
-    const text = renderPagesAsText(selectedPages).trim();
+    const text = renderSelectedReadPdfPages(pages, request);
     if (text) {
       return text;
     }
@@ -47,6 +46,9 @@ async function readAttachmentText(
     } catch (_e) {
       // ignore logging failures
     }
+    if (request.explicitRange) {
+      throw error;
+    }
     const fallback = await readZoteroIndexedText(attachment);
     if (fallback) {
       return fallback;
@@ -55,6 +57,35 @@ async function readAttachmentText(
   }
   const fallback = await readZoteroIndexedText(attachment);
   return fallback;
+}
+
+function renderSelectedReadPdfPages(
+  pages: ExtractedPage[],
+  request: ReadPdfPageRequest,
+): string {
+  const selectedPages = selectReadPdfPages(pages, request);
+  if (request.explicitRange && !selectedPages.length) {
+    throw new Error("No PDF pages matched the requested page range.");
+  }
+  const hasExtractableText = selectedPages.some((page) => page.text.trim());
+  if (!hasExtractableText) {
+    if (request.explicitRange) {
+      throw new Error(
+        "The requested PDF page range produced no extractable text.",
+      );
+    }
+    return "";
+  }
+  const text = renderPagesAsText(selectedPages).trim();
+  if (text) {
+    return text;
+  }
+  if (request.explicitRange) {
+    throw new Error(
+      "The requested PDF page range produced no extractable text.",
+    );
+  }
+  return "";
 }
 
 async function readZoteroIndexedText(attachment: Zotero.Item): Promise<string> {
@@ -97,10 +128,7 @@ async function readZoteroIndexedText(attachment: Zotero.Item): Promise<string> {
   return "";
 }
 
-export type ResolvedProposalInput = Omit<
-  AnnotationProposal,
-  "id" | "status" | "createdAt"
->;
+export type ResolvedProposalInput = AnnotationProposalInput;
 
 export interface ResolveWriteContext {
   item: Zotero.Item | null;
@@ -157,7 +185,10 @@ export function registerAnnotationReadTools(): void {
             "The PDF produced no extractable text. Try opening it in Zotero first so its full text is indexed.",
           );
         }
-        return truncateAtSentence(text, MAX_READ_PDF_CHARS);
+        return truncateAtSentence(
+          `PDF attachmentKey=${attachment.key} attachmentID=${attachment.id}\n${text}`,
+          MAX_READ_PDF_CHARS,
+        );
       } catch (error) {
         return formatToolError(formatErrorMessage(error));
       }
@@ -200,7 +231,7 @@ export function registerAnnotationReadTools(): void {
           if (entries.length >= MAX_LIST_ANNOTATION_ENTRIES) {
             break;
           }
-          entries.push(summarizeExistingAnnotation(annotation));
+          entries.push(summarizeExistingAnnotation(annotation, attachment));
         }
         if (entries.length >= MAX_LIST_ANNOTATION_ENTRIES) {
           break;
@@ -308,18 +339,124 @@ export async function resolveWriteAction(
   if (!attachments.length) {
     return [];
   }
-  const attachment = attachments[0];
   const input = action.rawInput;
   if (action.type === "propose-annotation") {
+    const attachment = selectTargetPdfAttachment(attachments, input);
+    if (!attachment) {
+      return [
+        failedProposal(
+          "create",
+          attachments[0],
+          buildFallbackResolvedAnnotation(input),
+          "Multiple PDF attachments found. Include attachmentKey or attachmentID in the action input.",
+        ),
+      ];
+    }
     return resolveProposeAnnotation(attachment, input);
   }
   if (action.type === "modify-annotation") {
+    const attachment = resolveAttachmentForAnnotationKey(attachments, input);
+    if (!attachment) {
+      return [
+        failedProposal(
+          "update",
+          attachments[0],
+          buildFallbackResolvedAnnotation(input),
+          "Target annotation does not belong to the current PDF attachment.",
+        ),
+      ];
+    }
     return resolveModifyAnnotation(attachment, input);
   }
   if (action.type === "delete-annotation") {
+    const attachment = resolveAttachmentForAnnotationKey(attachments, input);
+    if (!attachment) {
+      return [
+        failedProposal(
+          "delete",
+          attachments[0],
+          buildFallbackResolvedAnnotation(input),
+          "Target annotation does not belong to the current PDF attachment.",
+        ),
+      ];
+    }
     return resolveDeleteAnnotation(attachment, input);
   }
   return [];
+}
+
+function selectTargetPdfAttachment(
+  attachments: Zotero.Item[],
+  input: Record<string, unknown>,
+): Zotero.Item | null {
+  const attachmentKey =
+    asStringField(input.attachmentKey).trim() ||
+    asStringField(input.pdfKey).trim();
+  if (attachmentKey) {
+    return (
+      attachments.find((attachment) => attachment.key === attachmentKey) || null
+    );
+  }
+  const attachmentID =
+    readIntegerLike(input.attachmentID) ?? readIntegerLike(input.pdfID);
+  if (attachmentID !== null) {
+    return (
+      attachments.find((attachment) => attachment.id === attachmentID) || null
+    );
+  }
+  return attachments.length === 1 ? attachments[0] : null;
+}
+
+function resolveAttachmentForAnnotationKey(
+  attachments: Zotero.Item[],
+  input: Record<string, unknown>,
+): Zotero.Item | null {
+  const explicit = selectTargetPdfAttachment(attachments, input);
+  if (explicit) {
+    return explicit;
+  }
+  const key = asStringField(input.key).trim();
+  if (!key) {
+    return attachments.length === 1 ? attachments[0] : null;
+  }
+  for (const attachment of attachments) {
+    const existing = Zotero.Items.getByLibraryAndKey(
+      attachment.libraryID,
+      key,
+    ) as Zotero.Item | false;
+    if (
+      existing &&
+      existing.isAnnotation?.() &&
+      isAnnotationOnAttachment(existing, attachment)
+    ) {
+      return attachment;
+    }
+  }
+  return null;
+}
+
+function buildFallbackResolvedAnnotation(input: Record<string, unknown>): {
+  type: AnnotationResolvedJSONType;
+  pageIndex: number;
+  pageLabel: string;
+  rects: number[][];
+  text?: string;
+  comment?: string;
+  color?: string;
+  key?: string;
+} {
+  const pageLabelHint = asStringField(input.pageLabel).trim();
+  const pageIndex = resolvePageHint(input, pageLabelHint) ?? 0;
+  return {
+    type: normalizeAnnotationType(asStringField(input.type)) || "highlight",
+    pageIndex,
+    pageLabel: pageLabelHint || String(pageIndex + 1),
+    rects: [],
+    text: asStringField(input.text).trim(),
+    comment: asStringField(input.comment).trim(),
+    color: asStringField(input.color).trim(),
+    key: asStringField(input.key).trim() || undefined,
+  };
 }
 
 async function resolveProposeAnnotation(
@@ -333,6 +470,7 @@ async function resolveProposeAnnotation(
   const color = asStringField(input.color).trim();
   const pageLabelHint = asStringField(input.pageLabel).trim();
   const pageHint = resolvePageHint(input, pageLabelHint);
+  const hasExplicitPageHint = pageHint !== null || Boolean(pageLabelHint);
   const needsRects = type === "highlight" || type === "underline";
   if (needsRects) {
     if (!text) {
@@ -360,7 +498,27 @@ async function resolveProposeAnnotation(
         pageHint,
         pageLabelHint,
       );
-      const match = findTextRects(pages, resolvedPageHint, text);
+      if (hasExplicitPageHint && resolvedPageHint === null) {
+        return [
+          failedProposal(
+            "create",
+            attachment,
+            {
+              type,
+              pageIndex: pageHint ?? 0,
+              pageLabel: pageLabelHint || String((pageHint ?? 0) + 1),
+              rects: [],
+              text,
+              comment,
+              color,
+            },
+            "Requested page was not found in the PDF.",
+          ),
+        ];
+      }
+      const match = findTextRects(pages, resolvedPageHint, text, {
+        strictPage: hasExplicitPageHint,
+      });
       if (!match) {
         return [
           failedProposal(
@@ -468,6 +626,22 @@ async function resolveModifyAnnotation(
       ),
     ];
   }
+  if (!isAnnotationOnAttachment(existing, attachment)) {
+    return [
+      failedProposal(
+        "update",
+        attachment,
+        {
+          type: "note",
+          pageIndex: 0,
+          pageLabel: "?",
+          rects: [],
+          key,
+        },
+        "Target annotation does not belong to the selected PDF attachment.",
+      ),
+    ];
+  }
   const pageIndex = parseAnnotationPageIndex(existing.annotationPosition);
   return [
     {
@@ -531,6 +705,22 @@ async function resolveDeleteAnnotation(
       ),
     ];
   }
+  if (!isAnnotationOnAttachment(existing, attachment)) {
+    return [
+      failedProposal(
+        "delete",
+        attachment,
+        {
+          type: "note",
+          pageIndex: 0,
+          pageLabel: "?",
+          rects: [],
+          key,
+        },
+        "Target annotation does not belong to the selected PDF attachment.",
+      ),
+    ];
+  }
   const pageIndex = parseAnnotationPageIndex(existing.annotationPosition);
   return [
     {
@@ -591,6 +781,7 @@ function failedProposal(
     attachmentID: attachment.id,
     annotationKey: resolved.key,
     resolved,
+    status: "failed",
     sourceSnippet: truncate(
       resolved.text || resolved.comment || errorMessage,
       160,
@@ -836,19 +1027,56 @@ function collectPdfAttachments(item: Zotero.Item): Zotero.Item[] {
   return output;
 }
 
+function isAnnotationOnAttachment(
+  annotation: Zotero.Item,
+  attachment: Zotero.Item,
+): boolean {
+  if (annotation.libraryID !== attachment.libraryID) {
+    return false;
+  }
+  const annotationParentID = (
+    annotation as unknown as { parentID?: number | false }
+  ).parentID;
+  if (annotationParentID === attachment.id) {
+    return true;
+  }
+  const annotationParentKey = (
+    annotation as unknown as { parentKey?: string | false }
+  ).parentKey;
+  if (annotationParentKey && annotationParentKey === attachment.key) {
+    return true;
+  }
+  try {
+    return (attachment.getAnnotations?.(false) || []).some(
+      (candidate) => candidate.key === annotation.key,
+    );
+  } catch {
+    return false;
+  }
+}
+
 function findPrimaryPdfAttachment(item: Zotero.Item): Zotero.Item | null {
   const attachments = collectPdfAttachments(item);
   return attachments[0] || null;
 }
 
-function summarizeExistingAnnotation(annotation: Zotero.Item): string {
+function summarizeExistingAnnotation(
+  annotation: Zotero.Item,
+  attachment: Zotero.Item,
+): string {
   const pageLabel = annotation.annotationPageLabel || "?";
   const type = annotation.annotationType || "note";
   const text = normalizeMultiline(annotation.annotationText || "");
   const comment = normalizeMultiline(annotation.annotationComment || "");
   const snippetText = text ? truncate(text, 140) : "";
   const snippetComment = comment ? truncate(comment, 140) : "";
-  const parts = [`key=${annotation.key}`, `page=${pageLabel}`, `type=${type}`];
+  const parts = [
+    `key=${annotation.key}`,
+    `attachmentKey=${attachment.key}`,
+    `attachmentID=${attachment.id}`,
+    `page=${pageLabel}`,
+    `type=${type}`,
+  ];
   if (snippetText) {
     parts.push(`text="${snippetText}"`);
   }
@@ -916,6 +1144,7 @@ function asStringField(value: unknown): string {
 
 export const annotationToolsTestUtils = {
   parseReadPdfRangeFromQuery,
+  renderSelectedReadPdfPages,
   resolveReadPdfPageRequest,
   selectReadPdfPages,
 };
