@@ -1,7 +1,11 @@
 import { assert } from "chai";
 import {
+  executeToolAction,
+  inferAssistantReadOnlyToolAction,
+  looksLikeAssistantToolIntent,
   parseAssistantToolAction,
   registerToolActionHandler,
+  stripAssistantToolActionMarkup,
 } from "../src/modules/agent/toolAction";
 import {
   buildWebSearchContext,
@@ -28,6 +32,53 @@ registerToolActionHandler({
       (typeof actionInput.q === "string" ? actionInput.q : "") ||
       (typeof rawRecord.query === "string" ? rawRecord.query : "");
     return q.replace(/\s+/g, " ").trim();
+  },
+  isAvailable() {
+    return true;
+  },
+  async execute() {
+    return "";
+  },
+});
+
+registerToolActionHandler({
+  type: "disabled-test-tool",
+  readOnly: true,
+  aliases: ["disabled_test_tool"],
+  extractQuery() {
+    return "test";
+  },
+  isAvailable() {
+    return false;
+  },
+  async execute() {
+    return "should not run";
+  },
+});
+
+registerToolActionHandler({
+  type: "read-pdf",
+  readOnly: true,
+  aliases: ["read_pdf", "read pdf", "read-pdf"],
+  extractQuery(actionInput) {
+    return typeof actionInput.query === "string"
+      ? actionInput.query.trim() || "__full__"
+      : "__full__";
+  },
+  isAvailable() {
+    return true;
+  },
+  async execute() {
+    return "";
+  },
+});
+
+registerToolActionHandler({
+  type: "list-annotations",
+  readOnly: true,
+  aliases: ["list_annotations", "list annotations", "list-annotations"],
+  extractQuery() {
+    return "__all__";
   },
   isAvailable() {
     return true;
@@ -203,5 +254,76 @@ describe("web search logic", function () {
       },
       readOnly: true,
     });
+  });
+
+  it("should parse model-emitted tagged tool calls", function () {
+    const content = `我来帮你读取这篇文章，找出重点内容并进行高亮标注。<tool_call>
+<function=read_pdf>
+</invoke>
+<tool_name>read_pdf</tool_name>
+</function>
+</tool_call>`;
+    const action = parseAssistantToolAction(content);
+    assert.deepEqual(action, {
+      type: "read-pdf",
+      query: "__full__",
+      rawInput: {},
+      readOnly: true,
+    });
+    assert.equal(
+      stripAssistantToolActionMarkup(content),
+      "我来帮你读取这篇文章，找出重点内容并进行高亮标注。",
+    );
+  });
+
+  it("should detect tool intent when the model omits an executable action", function () {
+    assert.isTrue(
+      looksLikeAssistantToolIntent(
+        "我将继续阅读全文，并为你标注剩余部分的核心重点。现在开始读取第4页及以后的内容。",
+      ),
+    );
+    assert.isFalse(looksLikeAssistantToolIntent("这篇文章的核心观点如下。"));
+  });
+
+  it("should infer safe read-only PDF actions from omitted tool calls", function () {
+    const action = inferAssistantReadOnlyToolAction(
+      "我将继续阅读全文，并为你标注剩余部分的核心重点。现在开始读取第4页及以后的内容。",
+    );
+    assert.deepEqual(action, {
+      type: "read-pdf",
+      query:
+        "我将继续阅读全文，并为你标注剩余部分的核心重点。现在开始读取第4页及以后的内容。",
+      rawInput: {
+        query:
+          "我将继续阅读全文，并为你标注剩余部分的核心重点。现在开始读取第4页及以后的内容。",
+      },
+      readOnly: true,
+    });
+  });
+
+  it("should infer annotation listing before write plans", function () {
+    const action = inferAssistantReadOnlyToolAction(
+      "好的，我已经读取了第4页的内容。让我先查看已有的标注，然后继续为剩余部分添加重点标注。",
+    );
+    assert.deepEqual(action, {
+      type: "list-annotations",
+      query: "__all__",
+      rawInput: {},
+      readOnly: true,
+    });
+  });
+
+  it("should report parsed but unavailable tools explicitly", async function () {
+    const result = await executeToolAction(
+      {
+        type: "disabled-test-tool",
+        query: "test",
+        rawInput: {},
+        readOnly: true,
+      },
+      { requestToken: 1 },
+    );
+    assert.match(result, /^ERROR:/);
+    assert.include(result, "disabled-test-tool");
   });
 });

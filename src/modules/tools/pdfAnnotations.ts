@@ -7,6 +7,13 @@ export interface SaveAnnotationResult {
 }
 
 const DEFAULT_COLOR = "#ffd400";
+const DEFAULT_NOTE_RECT = [50, 750, 60, 760] as const;
+const MIN_RECT_EDGE = 0.5;
+const MAX_RECT_HEIGHT_POINTS = 96;
+const MAX_RECT_PAGE_HEIGHT_RATIO = 0.14;
+const MAX_SINGLE_RECT_PAGE_AREA_RATIO = 0.2;
+const MAX_TOTAL_RECT_PAGE_AREA_RATIO = 0.35;
+const MAX_RECTS_PER_ANNOTATION = 80;
 
 export async function createAnnotation(
   attachment: Zotero.Item,
@@ -97,22 +104,26 @@ export function buildAnnotationJSON(
   attachment: Zotero.Item,
 ): _ZoteroTypes.Annotations.AnnotationJson {
   const pageIndex = Math.max(0, Math.floor(resolved.pageIndex || 0));
-  const rects = Array.isArray(resolved.rects) ? resolved.rects : [];
+  const rects = normalizeAnnotationRects(
+    Array.isArray(resolved.rects) ? resolved.rects : [],
+    resolved.pageWidth,
+    resolved.pageHeight,
+  );
   const type = resolved.type;
+  const key = resolved.key || generateAnnotationKey();
   const position =
     type === "note" || type === "text"
       ? {
           pageIndex,
-          rects:
-            rects.length && rects[0].length === 4
-              ? rects.slice(0, 1)
-              : [[50, 750, 60, 760]],
+          rects: rects.length
+            ? rects.slice(0, 1)
+            : [getDefaultNoteRect(resolved.pageWidth, resolved.pageHeight)],
         }
-      : { pageIndex, rects };
+      : buildTextMarkupPosition(pageIndex, rects);
   return {
-    id: resolved.key || "",
+    id: key,
     libraryID: attachment.libraryID,
-    key: resolved.key || "",
+    key,
     type,
     text: resolved.text || "",
     comment: resolved.comment || "",
@@ -131,6 +142,39 @@ export function buildAnnotationJSON(
   } as _ZoteroTypes.Annotations.AnnotationJson;
 }
 
+function buildTextMarkupPosition(
+  pageIndex: number,
+  rects: number[][],
+): {
+  pageIndex: number;
+  rects: number[][];
+} {
+  if (!rects.length) {
+    throw new Error("Annotation position is invalid or outside the page.");
+  }
+  return { pageIndex, rects };
+}
+
+function generateAnnotationKey(): string {
+  try {
+    const utilities = (
+      Zotero as unknown as {
+        Utilities?: { randomString?: (len?: number, chars?: string) => string };
+      }
+    ).Utilities;
+    const key = utilities?.randomString?.(
+      8,
+      "23456789ABCDEFGHIJKLMNPQRSTUVWXYZ",
+    );
+    if (key && key.length === 8) {
+      return key;
+    }
+  } catch (_error) {
+    // fall through to local fallback
+  }
+  return Math.random().toString(36).slice(2, 10).toUpperCase().padEnd(8, "A");
+}
+
 function splitIfNeeded(
   json: _ZoteroTypes.Annotations.AnnotationJson,
 ): _ZoteroTypes.Annotations.AnnotationJson[] {
@@ -143,6 +187,118 @@ function splitIfNeeded(
     // Fall back to the original JSON if splitting is unavailable or throws.
   }
   return [json];
+}
+
+function normalizeAnnotationRects(
+  rects: number[][],
+  pageWidth?: number,
+  pageHeight?: number,
+): number[][] {
+  const safePageWidth = getPositiveNumber(pageWidth);
+  const safePageHeight = getPositiveNumber(pageHeight);
+  const pageArea =
+    safePageWidth !== null && safePageHeight !== null
+      ? safePageWidth * safePageHeight
+      : null;
+  const normalized: number[][] = [];
+  let totalArea = 0;
+
+  for (const rect of rects) {
+    if (!Array.isArray(rect) || rect.length < 4) {
+      continue;
+    }
+    const values = rect.slice(0, 4).map((value) => Number(value));
+    if (!values.every((value) => Number.isFinite(value))) {
+      continue;
+    }
+    let [x1, y1, x2, y2] = [
+      Math.min(values[0], values[2]),
+      Math.min(values[1], values[3]),
+      Math.max(values[0], values[2]),
+      Math.max(values[1], values[3]),
+    ];
+    if (safePageWidth !== null) {
+      x1 = clamp(x1, 0, safePageWidth);
+      x2 = clamp(x2, 0, safePageWidth);
+    }
+    if (safePageHeight !== null) {
+      y1 = clamp(y1, 0, safePageHeight);
+      y2 = clamp(y2, 0, safePageHeight);
+    }
+
+    const width = x2 - x1;
+    const height = y2 - y1;
+    if (width < MIN_RECT_EDGE || height < MIN_RECT_EDGE) {
+      continue;
+    }
+    if (
+      safePageHeight !== null &&
+      height >
+        Math.max(
+          MAX_RECT_HEIGHT_POINTS,
+          safePageHeight * MAX_RECT_PAGE_HEIGHT_RATIO,
+        )
+    ) {
+      continue;
+    }
+    const area = width * height;
+    if (
+      pageArea !== null &&
+      area > pageArea * MAX_SINGLE_RECT_PAGE_AREA_RATIO
+    ) {
+      continue;
+    }
+    totalArea += area;
+    normalized.push([round(x1), round(y1), round(x2), round(y2)]);
+    if (normalized.length >= MAX_RECTS_PER_ANNOTATION) {
+      break;
+    }
+  }
+
+  if (
+    pageArea !== null &&
+    normalized.length &&
+    totalArea > pageArea * MAX_TOTAL_RECT_PAGE_AREA_RATIO
+  ) {
+    return [];
+  }
+
+  return normalized.sort((a, b) => {
+    const yDelta = b[1] - a[1];
+    if (Math.abs(yDelta) > 0.5) {
+      return yDelta;
+    }
+    return a[0] - b[0];
+  });
+}
+
+function getDefaultNoteRect(pageWidth?: number, pageHeight?: number): number[] {
+  const safePageWidth = getPositiveNumber(pageWidth);
+  const safePageHeight = getPositiveNumber(pageHeight);
+  if (safePageWidth === null || safePageHeight === null) {
+    return [...DEFAULT_NOTE_RECT];
+  }
+  const left = clamp(DEFAULT_NOTE_RECT[0], 0, Math.max(0, safePageWidth - 10));
+  const bottom = clamp(
+    DEFAULT_NOTE_RECT[1],
+    0,
+    Math.max(0, safePageHeight - 10),
+  );
+  return [left, bottom, left + 10, bottom + 10].map(round);
+}
+
+function getPositiveNumber(value: number | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : null;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function round(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }
 
 function buildSortIndex(
@@ -262,5 +418,7 @@ function readErrorField(
 export const pdfAnnotationsTestUtils = {
   buildAnnotationJSON,
   buildSortIndex,
+  generateAnnotationKey,
+  normalizeAnnotationRects,
   normalizeColor,
 };

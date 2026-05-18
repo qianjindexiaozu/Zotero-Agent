@@ -13,7 +13,9 @@ If the user invokes this skill without any other guidance, ask them what they wa
 Hard rules — copy from `README.md` content fundamentals, never violate:
 
 - No prices / no model recommendations / no region-or-network advice / no third-party Zotero plugin endorsement.
-- No emoji anywhere. The mascot does the cute work.
+- No emoji anywhere.
 - Brand name is always `Zotero-Cat` (hyphen). Sentence case headings.
-- Apple-leaning: warm-paper light, deep-graphite dark, one orange accent, soft shadows, tight motion (`cubic-bezier(0.22, 1, 0.36, 1)`).
+- Apple-leaning: liquid-glass surfaces, cool-paper light, deep-graphite dark, one sky-blue accent, soft shadows, tight motion (`cubic-bezier(0.22, 1, 0.36, 1)`).
+- Brand mark is text-only. Do not add favicons, header artwork, mascots, wordmark SVGs, raster logo exports, or third-party icon systems unless the product direction explicitly changes.
+- The marketing site should show the plugin through GIF/WebM frames. Do not use terminal mocks as product UI.
 - Bilingual zh + en is the default — never English-only.

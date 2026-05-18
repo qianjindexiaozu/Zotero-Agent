@@ -44,25 +44,22 @@ export function getToolActionHandler(type: string): ToolActionHandler | null {
 }
 
 export function parseAssistantToolActions(content: string): ToolAction[] {
-  const candidates = collectJSONCandidates(content);
+  const records = collectToolActionRecords(content);
   const seen = new Set<string>();
   const actions: ToolAction[] = [];
-  for (const candidate of candidates) {
-    const parsedRecords = parseJSONRecords(candidate);
-    for (const parsed of parsedRecords) {
-      const action = toToolAction(parsed);
-      if (!action) {
-        continue;
-      }
-      const fingerprint = `${action.type}::${action.query}`;
-      if (seen.has(fingerprint)) {
-        continue;
-      }
-      seen.add(fingerprint);
-      actions.push(action);
-      if (actions.length >= MAX_ACTIONS_PER_TURN) {
-        return actions;
-      }
+  for (const record of records) {
+    const action = toToolAction(record);
+    if (!action) {
+      continue;
+    }
+    const fingerprint = `${action.type}::${action.query}`;
+    if (seen.has(fingerprint)) {
+      continue;
+    }
+    seen.add(fingerprint);
+    actions.push(action);
+    if (actions.length >= MAX_ACTIONS_PER_TURN) {
+      return actions;
     }
   }
   return actions;
@@ -92,8 +89,11 @@ export async function executeToolAction(
   },
 ): Promise<string> {
   const handler = handlers.get(action.type);
-  if (!handler || !handler.isAvailable()) {
-    return "";
+  if (!handler) {
+    return `ERROR: Unrecognized tool action: ${action.type}`;
+  }
+  if (!handler.isAvailable()) {
+    return `ERROR: Tool is not enabled or unavailable: ${action.type}`;
   }
   return handler.execute(action.query, {
     requestToken: options.requestToken,
@@ -101,6 +101,56 @@ export async function executeToolAction(
     rawInput: action.rawInput,
     item: options.item || null,
   });
+}
+
+export function stripAssistantToolActionMarkup(content: string): string {
+  return stripTaggedToolCallBlocks(stripJSONToolActionBlocks(content))
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function looksLikeAssistantToolIntent(content: string): boolean {
+  const text = stripAssistantToolActionMarkup(content)
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text || text.length > 600) {
+    return false;
+  }
+  return (
+    looksLikePdfReadIntent(text) ||
+    looksLikeAnnotationListIntent(text) ||
+    looksLikeAnnotationWriteIntent(text) ||
+    /(?:我(?:将|会|来|要|需要|继续)|现在|开始|准备|帮你).{0,40}(?:读取|阅读|阅读全文|调用|执行|搜索|联网搜索|标注|高亮|划重点)/i.test(
+      text,
+    ) ||
+    /(?:read|continue reading|search|look up|call|run|use|annotate|highlight).{0,40}(?:pdf|tool|web|search|annotation|highlight)/i.test(
+      text,
+    )
+  );
+}
+
+export function inferAssistantReadOnlyToolAction(
+  content: string,
+): ToolAction | null {
+  const text = stripAssistantToolActionMarkup(content)
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!looksLikeAssistantToolIntent(text)) {
+    return null;
+  }
+  if (looksLikeAnnotationListIntent(text)) {
+    return toToolAction({
+      action: "list_annotations",
+      action_input: {},
+    });
+  }
+  if (looksLikePdfReadIntent(text)) {
+    return toToolAction({
+      action: "read_pdf",
+      action_input: { query: text },
+    });
+  }
+  return null;
 }
 
 function toToolAction(record: Record<string, unknown>): ToolAction | null {
@@ -146,6 +196,15 @@ function resolveActionInput(
   return {};
 }
 
+function collectToolActionRecords(content: string): Record<string, unknown>[] {
+  const records: Record<string, unknown>[] = [];
+  for (const candidate of collectJSONCandidates(content)) {
+    records.push(...parseJSONRecords(candidate));
+  }
+  records.push(...collectTaggedToolCallRecords(content));
+  return records;
+}
+
 function collectJSONCandidates(content: string) {
   const candidates: string[] = [];
   const fencePattern = /```(?:json)?\s*([\s\S]*?)```/gi;
@@ -169,6 +228,27 @@ function collectJSONCandidates(content: string) {
   return candidates;
 }
 
+function collectTaggedToolCallRecords(
+  content: string,
+): Record<string, unknown>[] {
+  const records: Record<string, unknown>[] = [];
+  const toolCallPattern = /<tool_call\b[^>]*>([\s\S]*?)<\/tool_call>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = toolCallPattern.exec(content))) {
+    const record = parseTaggedToolCall(match[1] || "");
+    if (record) {
+      records.push(record);
+    }
+  }
+  if (!records.length && looksLikeTaggedToolCall(content)) {
+    const record = parseTaggedToolCall(content);
+    if (record) {
+      records.push(record);
+    }
+  }
+  return records;
+}
+
 function parseJSONRecords(text: string): Record<string, unknown>[] {
   try {
     const parsed = JSON.parse(text) as unknown;
@@ -179,9 +259,176 @@ function parseJSONRecords(text: string): Record<string, unknown>[] {
       return parsed.filter(isRecord) as Record<string, unknown>[];
     }
     return [];
-  } catch (_error) {
+  } catch {
     return [];
   }
+}
+
+function parseTaggedToolCall(text: string): Record<string, unknown> | null {
+  const action = readTaggedToolName(text);
+  if (!action) {
+    return null;
+  }
+  return {
+    action,
+    action_input: readTaggedToolInput(text),
+  };
+}
+
+function readTaggedToolName(text: string): string {
+  const toolName = readFirstTagText(text, "tool_name");
+  if (toolName) {
+    return normalizeActionName(toolName);
+  }
+  const functionEquals = text.match(
+    /<function\s*=\s*["']?([^"'\s>]+)["']?[^>]*>/i,
+  )?.[1];
+  if (functionEquals) {
+    return normalizeActionName(decodeMarkupText(functionEquals));
+  }
+  const functionName = text.match(
+    /<function\b[^>]*\bname\s*=\s*["']([^"']+)["'][^>]*>/i,
+  )?.[1];
+  return functionName
+    ? normalizeActionName(decodeMarkupText(functionName))
+    : "";
+}
+
+function readTaggedToolInput(text: string): Record<string, unknown> {
+  for (const tag of ["arguments", "parameters", "args", "input"]) {
+    const body = readFirstTagText(text, tag);
+    if (!body) {
+      continue;
+    }
+    const parsed = parseFirstJSONObject(body);
+    if (parsed) {
+      return parsed;
+    }
+  }
+  const parsed = parseFirstJSONObject(text);
+  if (parsed) {
+    return parsed;
+  }
+  return readSimpleTaggedFields(text);
+}
+
+function readSimpleTaggedFields(text: string): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+  for (const key of [
+    "query",
+    "q",
+    "topic",
+    "text",
+    "type",
+    "comment",
+    "color",
+    "key",
+    "page",
+    "pageNumber",
+    "pageIndex",
+    "pageLabel",
+  ]) {
+    const value = readFirstTagText(text, key);
+    if (value) {
+      fields[key] = value;
+    }
+  }
+  return fields;
+}
+
+function parseFirstJSONObject(text: string): Record<string, unknown> | null {
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace < 0 || lastBrace <= firstBrace) {
+    return null;
+  }
+  const records = parseJSONRecords(text.slice(firstBrace, lastBrace + 1));
+  return records.find(isRecord) || null;
+}
+
+function readFirstTagText(text: string, tagName: string): string {
+  const escaped = escapeRegExp(tagName);
+  const match = text.match(
+    new RegExp(`<${escaped}\\b[^>]*>([\\s\\S]*?)<\\/${escaped}>`, "i"),
+  );
+  return match?.[1] ? decodeMarkupText(match[1]).trim() : "";
+}
+
+function stripJSONToolActionBlocks(content: string): string {
+  return content.replace(/```(?:json)?\s*([\s\S]*?)```/gi, (match, inner) => {
+    const text = typeof inner === "string" ? inner.trim() : "";
+    if (!text) {
+      return match;
+    }
+    if (parseJSONRecords(text).some(looksLikeActionJSON)) {
+      return "";
+    }
+    return match;
+  });
+}
+
+function stripTaggedToolCallBlocks(content: string): string {
+  return content
+    .replace(/<tool_call\b[^>]*>[\s\S]*?<\/tool_call>/gi, "")
+    .replace(
+      /<function\s*=\s*["']?([^"'\s>]+)["']?[^>]*>[\s\S]*?<\/function>/gi,
+      (match, name) => {
+        const action = normalizeActionName(decodeMarkupText(String(name)));
+        return findHandlerByAlias(action) ? "" : match;
+      },
+    )
+    .replace(
+      /<function\b[^>]*\bname\s*=\s*["']([^"']+)["'][^>]*>[\s\S]*?<\/function>/gi,
+      (match, name) => {
+        const action = normalizeActionName(decodeMarkupText(String(name)));
+        return findHandlerByAlias(action) ? "" : match;
+      },
+    );
+}
+
+function looksLikeActionJSON(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  if (Array.isArray(value)) {
+    return value.some((entry) => looksLikeActionJSON(entry));
+  }
+  return "action" in (value as Record<string, unknown>);
+}
+
+function looksLikeTaggedToolCall(content: string): boolean {
+  return /<tool_name\b/i.test(content) || /<function(?:\s*=|\b)/i.test(content);
+}
+
+function looksLikePdfReadIntent(text: string): boolean {
+  return /(?:读取|阅读|阅读全文|读|read|continue reading).{0,60}(?:pdf|文章|全文|第\s*\d+\s*页|page|p\.)/i.test(
+    text,
+  );
+}
+
+function looksLikeAnnotationListIntent(text: string): boolean {
+  return /(?:列出|查看|检查|读取|看一下|看下|先看|list|get).{0,40}(?:已有的?)?(?:标注|批注|annotations?)/i.test(
+    text,
+  );
+}
+
+function looksLikeAnnotationWriteIntent(text: string): boolean {
+  return /(?:添加|新建|创建|继续为|进行|add|create|propose).{0,50}(?:标注|批注|高亮|划重点|annotations?|highlights?)/i.test(
+    text,
+  );
+}
+
+function decodeMarkupText(value: string): string {
+  return value
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function normalizeActionName(value: string) {

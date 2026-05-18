@@ -3,7 +3,7 @@
 Single-page recreation of the marketing site:
 
 - Sticky blurred header
-- Hero with typewriter terminal
+- Hero with plugin GIF frame
 - Feature triad (3 GIF cards)
 - 4-step quickstart with circular numbers
 - Provider chip wall

@@ -1,5 +1,6 @@
 import type { AgentMessage } from "./types";
 import { createRuntimeID } from "./runtimeIds";
+import { stripAssistantToolActionMarkup } from "./toolAction";
 
 export const CONVERSATION_STORE_VERSION = 2;
 export const MAX_PERSISTED_CONVERSATIONS = 32;
@@ -185,37 +186,9 @@ export function truncateForPersistence(text: string) {
 }
 
 function stripActionJSONBlocks(text: string): string {
-  // Remove fenced code blocks that parse to a tool-action JSON object so we
-  // don't persist raw action directives into conversation history.
-  const withoutFenced = text.replace(
-    /```(?:json)?\s*([\s\S]*?)```/gi,
-    (match, inner) => {
-      const body = typeof inner === "string" ? inner.trim() : "";
-      if (!body) {
-        return match;
-      }
-      try {
-        const parsed = JSON.parse(body);
-        if (looksLikeActionJSON(parsed)) {
-          return "";
-        }
-      } catch (_error) {
-        // Not JSON; keep the block untouched.
-      }
-      return match;
-    },
-  );
-  return withoutFenced.replace(/\n{3,}/g, "\n\n").trim();
-}
-
-function looksLikeActionJSON(value: unknown): boolean {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  if (Array.isArray(value)) {
-    return value.some((entry) => looksLikeActionJSON(entry));
-  }
-  return "action" in (value as Record<string, unknown>);
+  // Remove tool directives so raw JSON/XML-ish action markup does not become
+  // part of persisted chat history.
+  return stripAssistantToolActionMarkup(text);
 }
 
 function normalizePersistedConversation(entry: unknown, version: 1 | 2) {

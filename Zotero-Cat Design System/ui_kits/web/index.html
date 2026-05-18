@@ -7,7 +7,8 @@
     <style>
       body {
         margin: 0;
-        background: var(--color-bg);
+        background: var(--page-glow);
+        background-attachment: fixed;
         color: var(--color-fg);
         font-family: var(--font-sans);
       }
@@ -15,17 +16,20 @@
         position: sticky;
         top: 0;
         z-index: 10;
-        backdrop-filter: saturate(180%) blur(18px);
-        background: color-mix(in srgb, #ffffff 75%, transparent);
-        border-bottom: 1px solid color-mix(in srgb, #e6e5dd 60%, transparent);
+        padding: 8px 12px 0;
       }
       .hd-in {
         max-width: 1200px;
         margin: 0 auto;
-        padding: 14px 24px;
+        padding: 12px 16px;
         display: flex;
         align-items: center;
         gap: 24px;
+        border: 1px solid var(--glass-border);
+        border-radius: 20px;
+        background: var(--glass-bg-strong);
+        box-shadow: var(--glass-shadow);
+        backdrop-filter: var(--glass-filter);
       }
       .logo {
         display: inline-flex;
@@ -90,7 +94,7 @@
         align-items: center;
         gap: 6px;
         padding: 11px 22px;
-        border-radius: 10px;
+        border-radius: 999px;
         font-weight: 600;
         font-size: 15px;
         text-decoration: none;
@@ -101,9 +105,11 @@
           color 140ms;
       }
       .btn-p {
-        background: color-mix(in srgb, #5aa3f5 12%, transparent);
+        background: color-mix(in srgb, #5aa3f5 18%, var(--glass-bg-strong));
         color: #3d8bff;
-        border-color: color-mix(in srgb, #5aa3f5 28%, transparent);
+        border-color: color-mix(in srgb, #5aa3f5 35%, var(--glass-border));
+        box-shadow: var(--glass-shadow);
+        backdrop-filter: var(--glass-filter);
         transition:
           background 220ms cubic-bezier(0.32, 0.72, 0, 1),
           transform 220ms cubic-bezier(0.32, 0.72, 0, 1),
@@ -117,6 +123,10 @@
         transform: scale(0.96);
       }
       .btn-g {
+        background: var(--glass-bg);
+        border-color: var(--glass-border);
+        box-shadow: var(--glass-shadow);
+        backdrop-filter: var(--glass-filter);
         transition:
           background 220ms cubic-bezier(0.32, 0.72, 0, 1),
           transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
@@ -131,26 +141,25 @@
       .btn-g:hover {
         background: #e6e5dd;
       }
-      .term {
-        background: #15151a;
-        color: #e8e8ec;
+      .demo {
         border-radius: 14px;
         overflow: hidden;
-        font-family: var(--font-mono);
-        box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.45);
+        border: 1px solid #d5d9e2;
+        background: #ffffff;
+        box-shadow: 0 1px 2px rgba(20, 30, 60, 0.05);
         max-width: 920px;
       }
       .bar {
         display: flex;
         align-items: center;
         gap: 6px;
-        padding: 10px 14px;
-        background: rgba(255, 255, 255, 0.05);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        padding: 9px 12px;
+        background: color-mix(in srgb, #d5d9e2 42%, #ffffff);
+        border-bottom: 1px solid color-mix(in srgb, #d5d9e2 70%, transparent);
       }
       .dot {
-        width: 12px;
-        height: 12px;
+        width: 10px;
+        height: 10px;
         border-radius: 50%;
       }
       .r {
@@ -162,29 +171,35 @@
       .g {
         background: #28c840;
       }
-      .name {
-        margin-left: auto;
-        font-size: 14px;
-        color: rgba(232, 232, 236, 0.6);
+      .media {
+        aspect-ratio: 920/575;
+        display: grid;
+        align-content: center;
+        gap: 12px;
+        padding: 32px;
+        background: linear-gradient(
+          135deg,
+          #eef1f7,
+          color-mix(in srgb, #ffffff 72%, #f0f6ff)
+        );
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: #6b6b72;
       }
-      .body {
-        padding: 24px;
-        font-size: 1rem;
+      .media span {
+        height: 12px;
+        border-radius: 999px;
+        background: color-mix(in srgb, #1a1a1f 12%, transparent);
       }
-      .cur {
-        color: #5aa3f5;
-        animation: b 0.8s step-end infinite;
+      .media span:nth-child(1) {
+        width: 52%;
       }
-      @keyframes b {
-        50% {
-          opacity: 0;
-        }
+      .media span:nth-child(2) {
+        width: 72%;
+        background: color-mix(in srgb, #5aa3f5 18%, transparent);
       }
-      .muted {
-        color: rgba(232, 232, 236, 0.55);
-      }
-      .acc {
-        color: #5aa3f5;
+      .media span:nth-child(3) {
+        width: 38%;
       }
       section {
         max-width: 1200px;
@@ -294,13 +309,7 @@
   <body>
     <div class="hd">
       <div class="hd-in">
-        <a class="logo" href="#"
-          ><img
-            src="../../assets/icon-cat-line-filled.svg"
-            width="28"
-            height="28"
-          />Zotero‑Cat</a
-        >
+        <a class="logo" href="#">Zotero‑Cat</a>
         <nav><a>Features</a><a>Guide</a><a>Download</a><a>FAQ</a></nav>
         <a class="gh">GitHub ↗</a>
       </div>
@@ -316,16 +325,13 @@
         <a class="btn btn-p">5-min start →</a
         ><a class="btn btn-g">View on GitHub</a>
       </div>
-      <div class="term">
+      <div class="demo">
         <div class="bar">
           <span class="dot r"></span><span class="dot y"></span
-          ><span class="dot g"></span><span class="name">~/your-paper.pdf</span>
+          ><span class="dot g"></span>
         </div>
-        <div class="body">
-          <span class="muted">$</span> cat paper.pdf |
-          <span class="acc">zotero-cat</span> --explain<span class="cur"
-            >_</span
-          >
+        <div class="media" aria-label="first-chat.gif">
+          <span></span><span></span><span></span>
         </div>
       </div>
     </section>

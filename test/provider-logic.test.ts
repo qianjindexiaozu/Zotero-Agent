@@ -73,6 +73,19 @@ describe("provider logic", function () {
       }),
       "D",
     );
+    assert.equal(
+      providerTestUtils.extractStreamDelta({
+        type: "response.output_text.delta",
+        delta: "E",
+      }),
+      "E",
+    );
+  });
+
+  it("should use idle response timeout instead of a short HTTP wall timeout", function () {
+    const config = providerTestUtils.getChatTimeoutConfig();
+    assert.equal(config.httpTimeoutMs, 0);
+    assert.isAtLeast(config.responseIdleTimeoutMs, 300_000);
   });
 
   it("should attach reasoning effort payload and keep compatibility fallback", function () {

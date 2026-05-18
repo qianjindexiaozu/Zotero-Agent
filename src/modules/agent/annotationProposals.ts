@@ -11,6 +11,7 @@ export interface AnnotationResolvedJSON {
   pageIndex: number;
   pageLabel: string;
   rects: number[][];
+  pageWidth?: number;
   pageHeight?: number;
   text?: string;
   comment?: string;
@@ -92,6 +93,22 @@ export function summarizeBatch(batch: AnnotationBatch): BatchSummary {
     summary[proposal.status] += 1;
   }
   return summary;
+}
+
+export function getProposalApprovalKey(
+  proposal: Pick<AnnotationProposal, "op" | "resolved">,
+): string {
+  return `${proposal.op}:${proposal.resolved.type}`;
+}
+
+export function getPendingApprovalKeys(batch: AnnotationBatch): string[] {
+  const keys = new Set<string>();
+  for (const proposal of batch.proposals) {
+    if (proposal.status === "pending") {
+      keys.add(getProposalApprovalKey(proposal));
+    }
+  }
+  return [...keys].sort();
 }
 
 export function createBatch(

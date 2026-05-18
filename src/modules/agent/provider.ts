@@ -87,6 +87,8 @@ const OPENAI_COMPATIBLE_PROVIDER_IDS = new Set([
 const OPTIONAL_API_KEY_PROVIDER_IDS = new Set(["ollama"]);
 const ENDPOINT_HINTS_PREF_KEY = "openaiEndpointHints";
 const ENDPOINT_HINTS_MAX_ENTRIES = 32;
+const CHAT_HTTP_TIMEOUT_MS = 0;
+const CHAT_RESPONSE_IDLE_TIMEOUT_MS = 5 * 60_000;
 
 export function createProviderFromPrefs(): ChatProvider {
   const settings = readProviderSettings();
@@ -164,30 +166,42 @@ class OpenAICompatibleProvider implements ChatProvider {
       let attemptError: Error | null = null;
       for (const [payloadIndex, payload] of payloads.entries()) {
         const streamCollector = createStreamCollector(options?.onStreamDelta);
+        const watchdog = createResponseIdleWatchdog(
+          CHAT_RESPONSE_IDLE_TIMEOUT_MS,
+        );
         try {
           const request = await Zotero.HTTP.request("POST", attempt.endpoint, {
             headers,
             body: JSON.stringify(payload),
-            timeout: 60_000,
+            // Zotero.HTTP's timeout is a wall-clock request timeout. Model
+            // calls can legitimately run longer than that while still
+            // streaming progress, so we disable it and enforce an idle
+            // response timeout with the watchdog below.
+            timeout: CHAT_HTTP_TIMEOUT_MS,
             cancellerReceiver(canceller: () => void) {
+              watchdog.setCanceller(canceller);
               if (!options?.onCanceller) {
                 return;
               }
               options.onCanceller(() => {
                 try {
+                  watchdog.clear();
                   canceller();
-                } catch (_error) {
+                } catch {
                   // Ignore cancellation race errors.
                 }
               });
             },
             requestObserver(xhr: XMLHttpRequest) {
-              if (!attempt.stream) {
+              watchdog.markActivity();
+              if (attempt.stream) {
+                streamCollector.attach(xhr, () => watchdog.markActivity());
                 return;
               }
-              streamCollector.attach(xhr);
+              xhr.onprogress = () => watchdog.markActivity();
             },
           });
+          watchdog.clear();
           streamCollector.finalize();
           const streamedOutput = streamCollector.getText().trim();
           if (streamedOutput) {
@@ -214,7 +228,8 @@ class OpenAICompatibleProvider implements ChatProvider {
           }
           throw new Error(getString("agent-error-empty-response"));
         } catch (error) {
-          const normalizedError = toError(error);
+          const normalizedError = watchdog.getTimeoutError() || toError(error);
+          watchdog.clear();
           if (
             shouldRetryWithoutReasoning(
               normalizedError,
@@ -236,7 +251,9 @@ class OpenAICompatibleProvider implements ChatProvider {
             attemptError = normalizedError;
             break;
           }
-          throw error;
+          throw normalizedError;
+        } finally {
+          watchdog.clear();
         }
       }
       if (attemptError) {
@@ -670,9 +687,83 @@ class NonJSONResponseError extends Error {
 }
 
 interface StreamCollector {
-  attach(xhr: XMLHttpRequest): void;
+  attach(xhr: XMLHttpRequest, onProgress?: () => void): void;
   finalize(): void;
   getText(): string;
+}
+
+interface ResponseIdleWatchdog {
+  markActivity(): void;
+  setCanceller(cancel: () => void): void;
+  clear(): void;
+  getTimeoutError(): Error | null;
+}
+
+function createResponseIdleWatchdog(timeoutMs: number): ResponseIdleWatchdog {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let canceller: (() => void) | null = null;
+  let timedOut = false;
+  let closed = false;
+
+  const clearTimer = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  const resetTimer = () => {
+    if (closed || timedOut) {
+      return;
+    }
+    clearTimer();
+    timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        canceller?.();
+      } catch {
+        // Ignore cancellation race errors.
+      }
+    }, timeoutMs);
+  };
+
+  resetTimer();
+
+  return {
+    markActivity() {
+      resetTimer();
+    },
+    setCanceller(cancel: () => void) {
+      if (closed) {
+        return;
+      }
+      canceller = cancel;
+      if (timedOut) {
+        try {
+          cancel();
+        } catch {
+          // Ignore cancellation race errors.
+        }
+      }
+    },
+    clear() {
+      closed = true;
+      clearTimer();
+      canceller = null;
+    },
+    getTimeoutError() {
+      if (!timedOut) {
+        return null;
+      }
+      return new Error(
+        getString("agent-error-response-timeout", {
+          args: {
+            seconds: String(Math.round(timeoutMs / 1000)),
+          },
+        }),
+      );
+    },
+  };
 }
 
 function createStreamCollector(
@@ -732,8 +823,9 @@ function createStreamCollector(
   }
 
   return {
-    attach(xhr: XMLHttpRequest) {
+    attach(xhr: XMLHttpRequest, onProgress?: () => void) {
       xhr.onprogress = () => {
+        onProgress?.();
         const current = xhr.responseText || "";
         if (current.length <= consumedLength) {
           return;
@@ -798,6 +890,13 @@ function extractStreamDelta(payload: Record<string, unknown>) {
     return item.delta;
   }
 
+  if (
+    payload.type === "response.output_text.delta" &&
+    typeof payload.delta === "string"
+  ) {
+    return payload.delta;
+  }
+
   return "";
 }
 
@@ -840,6 +939,12 @@ export const providerTestUtils = {
   },
   extractStreamDelta(payload: Record<string, unknown>) {
     return extractStreamDelta(payload);
+  },
+  getChatTimeoutConfig() {
+    return {
+      httpTimeoutMs: CHAT_HTTP_TIMEOUT_MS,
+      responseIdleTimeoutMs: CHAT_RESPONSE_IDLE_TIMEOUT_MS,
+    };
   },
   buildPayloadVariants(
     wireAPI: WireAPI,

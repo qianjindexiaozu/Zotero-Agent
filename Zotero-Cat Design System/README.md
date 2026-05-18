@@ -12,10 +12,10 @@ The product is **independent open source**, **not affiliated with Zotero**, and 
 
 This design system was distilled from two repositories the user attached:
 
-| Source                                | Path / URL                                                                                                | What it contributes                                                                                                 |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Plugin (TypeScript / Zotero 9 add-on) | `Zotero-Cat/` &nbsp;·&nbsp; `github.com/qianjindexiaozu/Zotero-Cat`                                       | Item-pane chat UI, preferences pane, runtime tokens (`addon/content/zoteroPane.css`), Fluent localization.          |
-| Marketing site (Astro 5, SSG)         | `Zotero-Cat-Web/` &nbsp;·&nbsp; `github.com/qianjindexiaozu/Zotero-Cat-Web` &nbsp;·&nbsp; `zoterocat.org` | Public design tokens (`src/styles/tokens.css`), brand iconography, hero / terminal / story sections, content rules. |
+| Source                                | Path / URL                                                                                                | What it contributes                                                                                             |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Plugin (TypeScript / Zotero 9 add-on) | `Zotero-Cat/` &nbsp;·&nbsp; `github.com/qianjindexiaozu/Zotero-Cat`                                       | Item-pane chat UI, preferences pane, runtime tokens (`addon/content/zoteroPane.css`), Fluent localization.      |
+| Marketing site (Astro 5, SSG)         | `Zotero-Cat-Web/` &nbsp;·&nbsp; `github.com/qianjindexiaozu/Zotero-Cat-Web` &nbsp;·&nbsp; `zoterocat.org` | Public design tokens (`src/styles/tokens.css`), text-only brand mark, hero GIF / story sections, content rules. |
 
 The original spec lives at `Zotero-Cat-Web/docs/superpowers/specs/2026-05-04-zoterocat-website-design.md` (not pre-loaded — read on demand).
 
@@ -28,7 +28,7 @@ The original spec lives at `Zotero-Cat-Web/docs/superpowers/specs/2026-05-04-zot
 | **Plugin** | Compact 360px-tall pane inside Zotero's right item bar | Researchers mid-paper | Functional, terse, runtime        |
 | **Web**    | Full-bleed marketing + bilingual docs site             | First-time visitors   | Welcoming, narrative, opinionated |
 
-The plugin is **all chat, no chrome**: a streaming message list, a composer, a context preview, and a tiny diagnostics drawer. The marketing site is **all narrative**: a hero with a typewriter terminal, a feature triad with GIFs, a 4-step quickstart, a provider chip wall, and a "where the name comes from" story block.
+The plugin is **all chat, no chrome**: a streaming message list, a composer, a context preview, and a tiny diagnostics drawer. The marketing site is **all narrative**: a hero with a plugin GIF frame, a feature triad with GIFs, a 4-step quickstart, a provider chip wall, and a "where the name comes from" story block.
 
 ---
 
@@ -40,14 +40,7 @@ SKILL.md                   ← cross-compatible skill manifest for Claude Code
 colors_and_type.css        ← canonical CSS variables — colors, type, spacing, radii, shadows, motion
 fonts/                     ← Inter + JetBrains Mono (Google Fonts substitution — see VISUAL FOUNDATIONS)
 assets/
-  icon-cat-line.svg        ← NEW minimalist line-art cat-with-mortarboard (commissioned this round)
-  icon-cat-line-filled.svg ← same lines, orange tassel + nose accent
-  wordmark.svg             ← icon + "Zotero-Cat" lockup
-  original-icon.svg        ← previous (terminal-window-with-cat-face) icon — kept for reference
-  original-favicon.svg     ← previous favicon
-  apple-touch-icon.png     ← previous apple-touch-icon raster
   og-default.png           ← OG card raster
-  plugin-favicon.png       ← plugin item-pane section icon (16/20px)
   source-tokens.css        ← copy of upstream tokens.css for diffing
 preview/                   ← design system cards (registered in the Design System tab)
 ui_kits/
@@ -72,7 +65,7 @@ The voice is **shy-confident, tools-first, bilingual**. Copy reads like it was w
 
 - **Sentence case everywhere.** Headings, nav, buttons. Never Title Case. `Features`, `Download`, `Guide`, `FAQ`. Even `5-min start`.
 - **Compound brand name** is always `Zotero-Cat` (hyphen, capital Z, capital C). Never `Zotero Cat`, `zoterocat` (the domain is the only lowercase exception), or `zotero-cat` (file/CLI exception only).
-- **CLI-style flourishes** are lowercase + monospace: `$ cat paper.pdf | zotero-cat --explain`.
+- **CLI-style references** are allowed only in docs or the origin story. Do not use terminal mocks as product UI.
 
 ### Vocabulary — required
 
@@ -95,10 +88,10 @@ The voice is **shy-confident, tools-first, bilingual**. Copy reads like it was w
 
 ### Emoji & punctuation
 
-- **No emoji** anywhere — not in copy, not in headings, not in commit messages. The product earns its cuteness through the cat icon, not 🐱.
+- **No emoji** anywhere — not in copy, not in headings, not in commit messages.
 - **Arrow glyphs** are allowed and encouraged: `→` after primary CTAs, `↗` after external links.
 - **Em dashes** (`—`) are used liberally; en dashes are not. Chinese uses `·` (中点) as a separator in footers and inline lists.
-- **The `_` underscore** appears as the terminal cursor — keep the typewriter motif intact.
+- **The `_` underscore** may appear in code examples, but not as a homepage product motif.
 
 ### Examples (verbatim from the codebase)
 
@@ -118,53 +111,59 @@ The voice is **shy-confident, tools-first, bilingual**. Copy reads like it was w
 
 ## VISUAL FOUNDATIONS
 
-Apple-leaning sensibility — **warm-paper light**, **deep-graphite dark**, one **orange accent**, generous breathing room, restrained motion, soft shadows. Nothing screams.
+Apple-leaning sensibility — **liquid glass surfaces**, **cool luminous light**, **deep-graphite dark**, one **sky-blue accent**, generous breathing room, restrained motion, soft shadows. Nothing screams.
 
 ### Color
 
 Three named brand colors, plus warm neutrals:
 
-| Token                | Hex       | Role                                                                                                            |
-| -------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
-| `--brand-orange`     | `#5AA3F5` | Tassel on the cap, primary CTA on dark, terminal cursor, single-color accent                                    |
-| `--brand-orange-ink` | `#3D8BFF` | The same accent rendered legibly on the warm-paper light bg (4.6:1) — for link text, focus rings, prose accents |
-| `--brand-graphite`   | `#1A1A1F` | Default ink, deep dark surface                                                                                  |
-| `--brand-paper`      | `#FFFFFF` | Default light surface — **warm**, not pure white                                                                |
-| `--brand-signal`     | `#4ECDC4` | Cyan support color — connection-OK states, second-tier accents (use sparingly)                                  |
+| Token              | Hex       | Role                                                                                                    |
+| ------------------ | --------- | ------------------------------------------------------------------------------------------------------- |
+| `--brand-blue`     | `#5AA3F5` | Primary accent, selected UI, soft CTA tint                                                              |
+| `--brand-blue-ink` | `#3D8BFF` | The same accent rendered legibly on the cool-paper light bg — for link text, focus rings, prose accents |
+| `--brand-graphite` | `#1A1A1F` | Default ink, deep dark surface                                                                          |
+| `--brand-paper`    | `#FFFFFF` | Default light surface used inside translucent glass materials                                           |
+| `--brand-signal`   | `#4ECDC4` | Cyan support color — connection-OK states, second-tier accents (use sparingly)                          |
 
 **Rules:**
 
-- One accent at a time. Don't pair `--brand-orange` with `--brand-signal` in the same component.
-- Light mode is the default. Use `--brand-paper` (warm `#FFFFFF`) — never `#FFF` for page bg.
-- Dark mode lifts the orange to `#409CFF` to keep contrast against `#0F0F12`.
+- One accent at a time. Don't pair `--brand-blue` with `--brand-signal` in the same component.
+- Light mode is the default. Use broad cool luminous backgrounds behind translucent surfaces — never flat white walls everywhere.
+- Dark mode lifts the blue to `#409CFF` to keep contrast against `#0F0F12`.
 - Semantic state colors (`--color-success` `#1F5C23`, `--color-warning` `#8A5A00`, `--color-danger` `#8A1C1C`) are **muted, earthy hex values**, not neon.
 
 ### Typography
 
 - **Apple system stack first**, Inter as a web fallback: `-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter', …, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui`. PingFang in front for Chinese.
-- **JetBrains Mono** for code, the terminal demo, and runtime numerics ("1/4", "Step 1").
+- **JetBrains Mono** for code and runtime numerics ("1/4", "Step 1").
 - **Display tracking** is tight (`-0.02em`) at large sizes; body tracking is normal.
 - Hero headlines use `clamp(2.5rem, 5vw + 1rem, 6rem)` — they breathe at desktop, fold gracefully on mobile.
-- Body is `1rem` (16px) on the plugin and `1.125rem` (18px) on long-form web — the marketing site reads like a generous magazine, the plugin reads like a terminal.
+- Body is `1rem` (16px) on the plugin and `1.125rem` (18px) on long-form web — the marketing site reads like a generous magazine, the plugin reads like compact product UI.
 - **Line-height nudge for CJK**: `:lang(zh) { --lh-body: 1.8 }`. Always.
 
 ### Spacing
 
 8pt grid: `4 · 8 · 12 · 16 · 24 · 32 · 48 · 80 · 128`. The marketing site favors big jumps (24 → 80 → 128); the plugin compresses to (4 → 6 → 8 → 12). Never invent a one-off `14px`.
 
+### Liquid Glass
+
+- Shared surfaces use `--glass-bg`, `--glass-border`, `--glass-highlight`, `--glass-filter`, and `--glass-shadow`.
+- Glass should feel like a material: translucent fill, one clean highlight edge, soft depth, and `backdrop-filter: saturate(180%) blur(24px)`.
+- Keep the effect restrained. Do not stack glass panels inside glass panels unless the inner panel is an actual interaction surface.
+- Page backgrounds use broad cool light bands from `--page-glow`; do not add discrete orbs, bokeh, grain, or decorative blobs.
+
 ### Backgrounds
 
-- **No gradients in product UI.** None. The single exception is the terminal demo's _bar_ (a `color-mix` 5% white tint over the terminal bg) — not a real gradient.
-- **No textures, no grain, no noise.** The page is flat warm paper.
+- **No decorative image backgrounds.** GIF placeholders may use a quiet generated fill only while final demo media is pending.
+- **No textures, no grain, no noise.** The page is clean and luminous.
 - **No full-bleed photography.** GIFs of the actual plugin are the only "imagery"; they live inside `<GifFrame>` cards with a 1px border and the page bg — never full-bleed.
-- **No hand-drawn illustrations** beyond the cat icon and its derivatives.
+- **No hand-drawn illustrations** in production UI.
 
 ### Animation
 
 - **All motion is small and earned.** `cubic-bezier(0.22, 1, 0.36, 1)` is the standard ease (Apple-style).
 - Three durations: `--dur-fast: 140ms` (color/opacity), `--dur-base: 220ms` (component), `--dur-slow: 320ms` (page-level fade-up).
-- The hero terminal has a **typewriter** effect on `$ cat paper.pdf | zotero-cat --explain` — guarded by `prefers-reduced-motion: no-preference`.
-- The terminal cursor blinks with `step-end` at 800ms — sharp, not smooth.
+- The homepage hero uses a GIF/WebM frame of the plugin UI, not a terminal mock. The plugin has no terminal surface.
 - Streaming assistant messages get a `▋` block cursor with `step-end` at 800ms — same aesthetic family.
 - **Bouncy springs are forbidden.** No `cubic-bezier(.68,-0.55,…)`-style overshoots.
 - All keyframes live behind `@media (prefers-reduced-motion: no-preference)`.
@@ -186,18 +185,18 @@ Three named brand colors, plus warm neutrals:
 
 Three tiers, soft and Apple-ish:
 
-| Token               | Value                                                | Use                                          |
-| ------------------- | ---------------------------------------------------- | -------------------------------------------- |
-| `--shadow-1`        | `0 1px 2px / 0 1px 1px` rgba(20,20,25,0.04)          | Resting cards                                |
-| `--shadow-2`        | `0 4px 14px -4px / 0 2px 4px` rgba(20,20,25,0.08)    | Hover cards, dropdowns                       |
-| `--shadow-3`        | `0 14px 40px -10px / 0 4px 10px` rgba(20,20,25,0.18) | Modal, popover                               |
-| `--shadow-terminal` | `0 30px 60px -30px rgba(0,0,0,0.45)`                 | The hero terminal — the one signature shadow |
+| Token               | Value                                                | Use                                                               |
+| ------------------- | ---------------------------------------------------- | ----------------------------------------------------------------- |
+| `--shadow-1`        | `0 1px 2px / 0 1px 1px` rgba(20,20,25,0.04)          | Resting cards                                                     |
+| `--shadow-2`        | `0 4px 14px -4px / 0 2px 4px` rgba(20,20,25,0.08)    | Hover cards, dropdowns                                            |
+| `--shadow-3`        | `0 14px 40px -10px / 0 4px 10px` rgba(20,20,25,0.18) | Modal, popover                                                    |
+| `--shadow-terminal` | `0 30px 60px -30px rgba(0,0,0,0.45)`                 | Legacy code-block depth token; do not use for homepage product UI |
 
 Dark mode shadows are heavier-alpha (0.5–0.6) since they're on near-black.
 
 ### Transparency & blur
 
-- The sticky site header is the **only** blurred surface: `backdrop-filter: saturate(180%) blur(18px)`, with a `color-mix(…, 75%, transparent)` background. It floats over scroll but doesn't dominate.
+- Header, buttons, cards, GIF frames, callouts, provider chips, and doc panels may use the shared glass material. Keep blur and transparency tokenized.
 - `color-mix(in srgb, currentColor X%, transparent)` is the **canonical** way to get tinted neutrals — used heavily in the plugin's CSS so it inherits Zotero's theme.
 
 ### Radii
@@ -206,7 +205,7 @@ Dark mode shadows are heavier-alpha (0.5–0.6) since they're on near-black.
 
 ### Cards
 
-`background: var(--color-surface)` + `1px` border + `--r-md` (10px) on light / `--r-lg` (14px) for hero-tier cards. Resting shadow is `--shadow-1` or none. Hover lifts to `--shadow-2` and either darkens the border or shifts it to `--color-accent`. **No colored left-bar accent cards.**
+Use the shared liquid glass material: `background: var(--glass-bg)`, `border: 1px solid var(--glass-border)`, `box-shadow: var(--glass-shadow)`, and `backdrop-filter: var(--glass-filter)`. Hover can lift to `--glass-shadow-hover` and strengthen the border. **No colored left-bar accent cards.**
 
 ### Layout rules
 
@@ -216,48 +215,33 @@ Dark mode shadows are heavier-alpha (0.5–0.6) since they're on near-black.
 
 ### Imagery vibe
 
-- **Warm**, not cool. The light mode is intentionally tinted (`#FFFFFF` not `#FFF`).
+- **Clean and cool**, not cold. The light mode uses a soft page background with white surfaces.
 - **No B&W**, **no grain**, **no duotone**.
 - **GIFs of the plugin in action** are the only photographic content. They use the actual product UI on a `--color-bg` background — they look like screenshots, not stock.
 
 ---
 
-## ICONOGRAPHY
+## Brand Mark
 
-The brand has **one mascot** — the cat in a mortarboard — and **no icon library** beyond what Zotero/Firefox provides at runtime. We don't ship our own icon font.
+The brand mark is text-only: `Zotero-Cat`. Do not add a favicon, header artwork,
+mascot, wordmark SVG, or raster brand export unless the product direction changes
+again.
 
-### The mascot
-
-- **Subject**: a cat's face, front-on, wearing a graduation cap with an orange tassel. The tassel is the single brand-color hit.
-- **Old icon** (`assets/original-icon.svg`): a terminal-window background with a detailed cat (round glasses, ears, eyes, nose, mouth, mortarboard). User feedback: _"the icons are ugly — needs a simple line-art front-facing cat-face with a mortarboard, just a few lines."_
-- **New icon** (`assets/icon-cat-line.svg` + `…-filled.svg`): minimalist line-art, ~14 strokes, closed happy `^^` eyes, tiny `w` mouth, jaunty cap, curly tassel, faint blush + whisker hints. Stroke `1.8`, `linecap=round`, `linejoin=round`. Renders crisply at 16×16 plugin size and 96×96 hero size. The "filled" variant only colors the tassel + nose + blush in `--brand-orange`; the line variant uses `currentColor` and inherits.
-
-**Substitution flag**: the old terminal-window icon is _kept_ at `assets/original-icon.svg` for reference only — the website (`favicon.svg`, `brand/icon.svg`) should be updated to the new line-art before publishing. The plugin's `addon/content/icons/icon-16.png` / `icon-20.png` rasters need to be re-exported from `icon-cat-line.svg` at the matching sizes; flagged for the user to do, since I don't have a PNG rasterizer in this environment.
-
-### Other iconography
+### Inline glyphs
 
 - **Inline UI glyphs** are unicode characters, not SVGs:
   - `→` after primary CTA labels
   - `↗` after external links (`View on GitHub ↗`)
-  - `_` as the terminal cursor (animated `step-end` blink)
+  - `_` only in code examples
   - `▋` as the streaming-message cursor
   - `·` as the inline separator (especially in the footer)
   - `➤` (filled triangle) as the send-message button glyph in the plugin
   - `■` as the stop-message button glyph in the plugin
   - `⧉` as the copy-message button glyph; `✓` for "copied" feedback
-- **The theme toggle** uses a hand-drawn 24×24 stroke SVG with a sun (visible in light) and a moon (visible in dark). Stroke `1.8`, no fill.
-- **Traffic-light dots** appear on the terminal demo and the favicon — `#FF5F57 / #FEBC2E / #28C840`. These are macOS-window decoration, not interactive.
-- **No emoji as iconography.** None. (And per Content Fundamentals — none in copy either.)
-- **No third-party icon system** is loaded. If a future surface needs more glyphs, the recommendation (flagged for user) is **Lucide** at default `1.5` stroke, switched to `1.8` to match this system. Don't pull in Heroicons (too solid) or FontAwesome (too noisy).
-
-### When to draw vs. when to use unicode
-
-| Need                     | Use                                                                |
-| ------------------------ | ------------------------------------------------------------------ |
-| The mascot               | `assets/icon-cat-line.svg`                                         |
-| A directional arrow      | `→` `↗` `←` (unicode)                                              |
-| A status indicator       | A colored dot (`<span style="background: var(--color-success)">`)  |
-| A new product affordance | **Stop and ask the user.** Do not invent SVG icons in this system. |
+- **The theme toggle** is text-only.
+- **Traffic-light dots** appear on GIF frames — `#FF5F57 / #FEBC2E / #28C840`. These are macOS-window decoration, not interactive.
+- **No emoji as visual shorthand.** None. (And per Content Fundamentals — none in copy either.)
+- **No third-party icon system** is loaded.
 
 ---
 

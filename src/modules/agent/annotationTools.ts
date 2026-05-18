@@ -1,6 +1,5 @@
 import { getPref } from "../../utils/prefs";
 import {
-  asString,
   isRecord,
   normalizeMultiline,
   truncate,
@@ -16,15 +15,27 @@ import {
   extractPages,
   findTextRects,
   renderPagesAsText,
+  type ExtractedPage,
 } from "../tools/pdfReader";
 
 const MAX_READ_PDF_CHARS = 8_000;
 const MAX_LIST_ANNOTATION_ENTRIES = 80;
 
-async function readAttachmentText(attachment: Zotero.Item): Promise<string> {
+interface ReadPdfPageRequest {
+  explicitRange: boolean;
+  fromIndex?: number;
+  toIndex?: number;
+  pageLabel?: string;
+}
+
+async function readAttachmentText(
+  attachment: Zotero.Item,
+  request: ReadPdfPageRequest,
+): Promise<string> {
   try {
     const pages = await extractPages(attachment);
-    const text = renderPagesAsText(pages).trim();
+    const selectedPages = selectReadPdfPages(pages, request);
+    const text = renderPagesAsText(selectedPages).trim();
     if (text) {
       return text;
     }
@@ -137,7 +148,10 @@ export function registerAnnotationReadTools(): void {
         return formatToolError("No PDF attachment found for the current item.");
       }
       try {
-        const text = await readAttachmentText(attachment);
+        const text = await readAttachmentText(
+          attachment,
+          resolveReadPdfPageRequest(query, options.rawInput || {}),
+        );
         if (!text) {
           return formatToolError(
             "The PDF produced no extractable text. Try opening it in Zotero first so its full text is indexed.",
@@ -341,7 +355,12 @@ async function resolveProposeAnnotation(
     }
     try {
       const pages = await extractPages(attachment);
-      const match = findTextRects(pages, pageHint ?? null, text);
+      const resolvedPageHint = resolvePageHintFromExtractedPages(
+        pages,
+        pageHint,
+        pageLabelHint,
+      );
+      const match = findTextRects(pages, resolvedPageHint, text);
       if (!match) {
         return [
           failedProposal(
@@ -356,7 +375,9 @@ async function resolveProposeAnnotation(
               comment,
               color,
             },
-            "Could not locate the quoted text in the PDF.",
+            pageHint === null && !pageLabelHint
+              ? "Could not locate the quoted text unambiguously in the PDF. Include pageLabel or pageIndex in the action input."
+              : "Could not locate the quoted text in the PDF.",
           ),
         ];
       }
@@ -371,6 +392,7 @@ async function resolveProposeAnnotation(
             pageIndex: match.pageIndex,
             pageLabel: match.pageLabel,
             rects: match.rects,
+            pageWidth: matchedPage?.pageWidth,
             pageHeight: matchedPage?.pageHeight,
             text: match.matchedText,
             comment,
@@ -581,17 +603,189 @@ function resolvePageHint(
   input: Record<string, unknown>,
   pageLabelHint: string,
 ): number | null {
-  if (typeof input.pageIndex === "number" && Number.isFinite(input.pageIndex)) {
-    return Math.max(0, Math.floor(input.pageIndex));
+  const pageIndex = readIntegerLike(input.pageIndex);
+  if (pageIndex !== null) {
+    return Math.max(0, pageIndex);
   }
-  if (typeof input.page === "number" && Number.isFinite(input.page)) {
-    return Math.max(0, Math.floor(input.page) - 1);
+  const pageNumber =
+    readIntegerLike(input.page) ?? readIntegerLike(input.pageNumber);
+  if (pageNumber !== null) {
+    return Math.max(0, pageNumber - 1);
   }
-  const numericLabel = Number.parseInt(pageLabelHint, 10);
-  if (Number.isFinite(numericLabel) && numericLabel > 0) {
-    return numericLabel - 1;
+  const numericLabel = readIntegerLike(pageLabelHint);
+  if (numericLabel !== null && numericLabel > 0) {
+    return Math.max(0, numericLabel - 1);
   }
   return null;
+}
+
+function resolveReadPdfPageRequest(
+  query: string,
+  input: Record<string, unknown>,
+): ReadPdfPageRequest {
+  const pageLabel = asStringField(input.pageLabel).trim();
+  const exactPage =
+    readIntegerLike(input.pageIndex) !== null
+      ? readIntegerLike(input.pageIndex)! + 1
+      : (readIntegerLike(input.page) ?? readIntegerLike(input.pageNumber));
+  const fromPage =
+    readIntegerLike(input.fromPage) ??
+    readIntegerLike(input.startPage) ??
+    readIntegerLike(input.pageFrom) ??
+    readIntegerLike(input.start);
+  const toPage =
+    readIntegerLike(input.toPage) ??
+    readIntegerLike(input.endPage) ??
+    readIntegerLike(input.pageTo) ??
+    readIntegerLike(input.end);
+
+  if (exactPage !== null && exactPage > 0) {
+    return {
+      explicitRange: true,
+      fromIndex: exactPage - 1,
+      toIndex: exactPage - 1,
+    };
+  }
+  if (fromPage !== null || toPage !== null) {
+    return {
+      explicitRange: true,
+      fromIndex: fromPage !== null && fromPage > 0 ? fromPage - 1 : undefined,
+      toIndex: toPage !== null && toPage > 0 ? toPage - 1 : undefined,
+    };
+  }
+  if (pageLabel) {
+    return { explicitRange: true, pageLabel };
+  }
+  return parseReadPdfRangeFromQuery(query);
+}
+
+function parseReadPdfRangeFromQuery(query: string): ReadPdfPageRequest {
+  const normalized = query.trim();
+  if (!normalized || normalized === "__full__") {
+    return { explicitRange: false };
+  }
+  const rangeMatch = normalized.match(
+    /(?:p(?:age)?\.?\s*)?(\d+)\s*(?:-|–|—|到|至|through|to)\s*(?:p(?:age)?\.?\s*)?(\d+)/i,
+  );
+  if (rangeMatch) {
+    const from = Number.parseInt(rangeMatch[1], 10);
+    const to = Number.parseInt(rangeMatch[2], 10);
+    if (from > 0 && to > 0) {
+      return {
+        explicitRange: true,
+        fromIndex: Math.min(from, to) - 1,
+        toIndex: Math.max(from, to) - 1,
+      };
+    }
+  }
+  const onwardMatch = normalized.match(
+    /(?:第\s*)?(\d+)\s*(?:页|p\.?|page)?\s*(?:及以后|以后|之后|后|起|开始|onwards?|and later|to end)/i,
+  );
+  if (onwardMatch) {
+    const from = Number.parseInt(onwardMatch[1], 10);
+    if (from > 0) {
+      return { explicitRange: true, fromIndex: from - 1 };
+    }
+  }
+  const fromMatch = normalized.match(
+    /(?:from|start(?:ing)? at|从|自)\s*(?:第\s*)?(?:p(?:age)?\.?\s*)?(\d+)/i,
+  );
+  if (fromMatch) {
+    const from = Number.parseInt(fromMatch[1], 10);
+    if (from > 0) {
+      return { explicitRange: true, fromIndex: from - 1 };
+    }
+  }
+  const singlePageMatch = normalized.match(
+    /(?:第\s*)?(\d+)\s*(?:页|page|p\.)/i,
+  );
+  if (singlePageMatch) {
+    const page = Number.parseInt(singlePageMatch[1], 10);
+    if (page > 0) {
+      return {
+        explicitRange: true,
+        fromIndex: page - 1,
+        toIndex: page - 1,
+      };
+    }
+  }
+  return { explicitRange: false };
+}
+
+function selectReadPdfPages(
+  pages: ExtractedPage[],
+  request: ReadPdfPageRequest,
+): ExtractedPage[] {
+  if (!request.explicitRange) {
+    return pages;
+  }
+  if (request.pageLabel) {
+    const normalizedLabel = request.pageLabel.trim().toLowerCase();
+    return pages.filter(
+      (page) => page.pageLabel.trim().toLowerCase() === normalizedLabel,
+    );
+  }
+  const fromIndex = Math.max(0, request.fromIndex ?? 0);
+  const toIndex = Math.min(
+    pages.length - 1,
+    request.toIndex ?? pages.length - 1,
+  );
+  if (fromIndex > toIndex) {
+    return [];
+  }
+  return pages.filter(
+    (page) => page.pageIndex >= fromIndex && page.pageIndex <= toIndex,
+  );
+}
+
+function resolvePageHintFromExtractedPages(
+  pages: ExtractedPage[],
+  pageHint: number | null,
+  pageLabelHint: string,
+): number | null {
+  if (pageHint !== null && pageHint >= 0 && pageHint < pages.length) {
+    return pageHint;
+  }
+  const normalizedLabel = pageLabelHint.trim().toLowerCase();
+  if (normalizedLabel) {
+    const exact = pages.find(
+      (page) => page.pageLabel.trim().toLowerCase() === normalizedLabel,
+    );
+    if (exact) {
+      return exact.pageIndex;
+    }
+    const numericLabel = readIntegerLike(normalizedLabel);
+    if (numericLabel !== null && numericLabel > 0) {
+      const fromNumber = numericLabel - 1;
+      if (fromNumber >= 0 && fromNumber < pages.length) {
+        return fromNumber;
+      }
+    }
+  }
+  return null;
+}
+
+function readIntegerLike(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.floor(value);
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const direct = Number.parseInt(trimmed, 10);
+  if (Number.isFinite(direct)) {
+    return direct;
+  }
+  const embedded = trimmed.match(/\d+/);
+  if (!embedded) {
+    return null;
+  }
+  const parsed = Number.parseInt(embedded[0], 10);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function parseAnnotationPageIndex(value: string | undefined): number {
@@ -719,6 +913,12 @@ function readField(record: Record<string, unknown>, field: string): string {
 function asStringField(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
+
+export const annotationToolsTestUtils = {
+  parseReadPdfRangeFromQuery,
+  resolveReadPdfPageRequest,
+  selectReadPdfPages,
+};
 
 function extractItemFromOptions(options: {
   item?: Zotero.Item | null;

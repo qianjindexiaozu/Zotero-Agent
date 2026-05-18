@@ -1,71 +1,202 @@
-/* Design tokens — single source of truth.
-   Values come from the spec section 3 (Visual System). */
+/* Live design tokens. Values follow the local Zotero-Cat Design System UI rules. */
 
 :root {
-  /* light mode — default */
-  --color-bg: #fafaf7;
-  --color-fg: #1a1a1f;
-  --color-muted: #6b6b72;
-  --color-border: #e6e5dd;
-  --color-accent: #5aa3f5; /* decorative: button bg, terminal cursor, mortarboard tassel */
-  --color-accent-on-light: #3d8bff; /* readable: link text, focus ring, prose accents — 4.6:1 on bg */
-  --color-code-bg: #eceae0; /* inline code chip (slightly darker than --color-border) */
+  /* brand */
+  --brand-blue: #5aa3f5;
+  --brand-blue-ink: #3d8bff;
+  --brand-blue-tint: #f0f6ff;
+  --brand-amber: #d97706;
+  --brand-graphite: #1d1d1f;
+  --brand-paper: #ffffff;
+  --brand-signal: #34c759;
+
+  /* neutrals */
+  --paper-0: #ffffff;
+  --paper-1: #f5f7fb;
+  --paper-2: #eef1f7;
+  --paper-3: #e3e6ee;
+  --paper-4: #d5d9e2;
+  --paper-5: #b9bfcb;
+
+  --ink-1: #1a1a1f;
+  --ink-2: #3a3a42;
+  --ink-3: #6b6b72;
+  --ink-4: #9a9aa2;
+
+  /* semantic color */
+  --color-bg: var(--paper-1);
+  --color-surface: rgba(255, 255, 255, 0.78);
+  --color-surface-sunken: var(--paper-2);
+  --color-fg: var(--ink-1);
+  --color-fg-muted: var(--ink-3);
+  --color-fg-subtle: var(--ink-4);
+  --color-muted: var(--color-fg-muted);
+  --color-border: var(--paper-4);
+  --color-border-strong: #d6d5cb;
+  --color-accent: var(--brand-blue);
+  --color-accent-ink: var(--brand-blue-ink);
+  --color-accent-on-light: var(--color-accent-ink);
+  --color-accent-tint: var(--brand-blue-tint);
+  --color-code-bg: var(--paper-3);
   --color-terminal-bg: #15151a;
   --color-terminal-fg: #e8e8ec;
-  --color-signal: #4ecdc4;
+  --color-signal: var(--brand-signal);
+  --color-success: #1f5c23;
+  --color-warning: #8a5a00;
+  --color-danger: #8a1c1c;
+  --color-link: var(--color-accent-ink);
+
+  /* liquid glass material */
+  --glass-bg: rgba(255, 255, 255, 0.54);
+  --glass-bg-strong: rgba(255, 255, 255, 0.74);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.36);
+  --glass-border: rgba(255, 255, 255, 0.68);
+  --glass-border-strong: rgba(255, 255, 255, 0.92);
+  --glass-edge: rgba(61, 139, 255, 0.18);
+  --glass-highlight: rgba(255, 255, 255, 0.86);
+  --glass-filter: saturate(180%) blur(24px);
+  --glass-shadow:
+    0 18px 48px -28px rgba(31, 68, 128, 0.38),
+    0 2px 10px rgba(31, 68, 128, 0.08), inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 rgba(61, 139, 255, 0.08);
+  --glass-shadow-hover:
+    0 24px 64px -30px rgba(31, 68, 128, 0.48),
+    0 4px 16px rgba(31, 68, 128, 0.1), inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 rgba(61, 139, 255, 0.12);
+  --glass-rim: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.72),
+      rgba(255, 255, 255, 0.12)
+    )
+    border-box;
+  --page-glow:
+    linear-gradient(135deg, rgba(90, 163, 245, 0.16), transparent 34%),
+    linear-gradient(225deg, rgba(52, 199, 89, 0.1), transparent 38%),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(238, 241, 247, 0.72)
+    );
 
   /* type */
   --font-sans:
-    "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Heiti SC",
-    system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Heiti SC", system-ui,
+    sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --fs-h1: clamp(2.5rem, 5vw + 1rem, 6rem); /* up to 96px */
-  --fs-h2: clamp(2rem, 3vw + 1rem, 3.5rem);
-  --fs-h3: 1.5rem;
-  --fs-body: 1.125rem; /* 18px */
-  --fs-small: 0.9375rem; /* 15px */
+  --fs-display: clamp(2.5rem, 5vw + 1rem, 5rem);
+  --fs-h1: clamp(2rem, 3vw + 1rem, 3.5rem);
+  --fs-h2: 1.75rem;
+  --fs-h3: 1.375rem;
+  --fs-h4: 1.125rem;
+  --fs-body: 1rem;
+  --fs-body-lg: 1.125rem;
+  --fs-small: 0.9375rem;
+  --fs-caption: 0.8125rem;
+  --fs-micro: 0.6875rem;
 
   --lh-tight: 1.05;
-  --lh-body: 1.7;
+  --lh-snug: 1.25;
+  --lh-body: 1.6;
+  --lh-loose: 1.8;
 
-  /* spacing — 8px base, 8/16/24/32/48/80/128 (--sp-5 / 40px intentionally omitted per spec) */
-  --sp-1: 0.5rem;
-  --sp-2: 1rem;
-  --sp-3: 1.5rem;
-  --sp-4: 2rem;
-  --sp-6: 3rem;
+  /* spacing */
+  --sp-0: 0;
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-8: 3rem;
   --sp-10: 5rem;
+  --sp-12: 8rem;
   --sp-16: 8rem;
 
-  /* layout widths */
+  /* layout */
   --w-prose: 720px;
   --w-wide: 1080px;
   --w-hero: 1200px;
 
   /* motion */
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-emphasized: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-fast: 100ms;
-  --dur-base: 200ms;
-  --dur-slow: 300ms;
+  --dur-instant: 80ms;
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+  --dur-slow: 320ms;
 
   /* radii */
+  --r-xs: 4px;
   --r-sm: 6px;
-  --r-md: 12px;
-  --r-lg: 16px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-2xl: 28px;
+  --r-pill: 999px;
+
+  /* shadows */
+  --shadow-1:
+    0 1px 2px rgba(20, 30, 60, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --shadow-2:
+    0 4px 14px -4px rgba(20, 30, 60, 0.1), 0 2px 4px rgba(20, 30, 60, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --shadow-3:
+    0 14px 40px -10px rgba(20, 30, 60, 0.2), 0 4px 10px rgba(20, 30, 60, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --shadow-terminal: 0 30px 60px -30px rgba(0, 0, 0, 0.45);
+  --ring-focus: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent-ink);
 }
 
 [data-theme="dark"] {
   --color-bg: #0f0f12;
+  --color-surface: rgba(21, 21, 26, 0.78);
+  --color-surface-sunken: #0a0a0e;
   --color-fg: #ececef;
-  --color-muted: #888892;
+  --color-fg-muted: #888892;
+  --color-fg-subtle: #5c5c66;
+  --color-muted: var(--color-fg-muted);
   --color-border: #25252b;
-  --color-accent: #409cff; /* dark-mode accent has 8.24:1 vs bg already */
-  --color-accent-on-light: #409cff; /* same as accent in dark mode (no separate text variant needed) */
+  --color-border-strong: #34343c;
+  --color-accent: #409cff;
+  --color-accent-ink: #409cff;
+  --color-accent-on-light: var(--color-accent-ink);
+  --color-accent-tint: rgba(64, 156, 255, 0.16);
   --color-code-bg: #25252b;
   --color-terminal-bg: #0a0a0e;
   --color-terminal-fg: #ececef;
-  --color-signal: #5fe0d6;
+  --color-link: #409cff;
+  --color-signal: #34c759;
+  --glass-bg: rgba(28, 28, 34, 0.5);
+  --glass-bg-strong: rgba(32, 32, 40, 0.72);
+  --glass-bg-subtle: rgba(24, 24, 30, 0.36);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-strong: rgba(255, 255, 255, 0.24);
+  --glass-edge: rgba(64, 156, 255, 0.26);
+  --glass-highlight: rgba(255, 255, 255, 0.12);
+  --glass-shadow:
+    0 20px 60px -32px rgba(0, 0, 0, 0.9), 0 4px 18px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 rgba(64, 156, 255, 0.1);
+  --glass-shadow-hover:
+    0 28px 72px -34px rgba(0, 0, 0, 0.95), 0 6px 22px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(64, 156, 255, 0.16);
+  --glass-rim: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.16),
+      rgba(255, 255, 255, 0.04)
+    )
+    border-box;
+  --page-glow:
+    linear-gradient(135deg, rgba(64, 156, 255, 0.2), transparent 34%),
+    linear-gradient(225deg, rgba(52, 199, 89, 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(15, 15, 18, 0.94), rgba(10, 10, 14, 0.96));
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 4px 14px -4px rgba(0, 0, 0, 0.55);
+  --shadow-3: 0 14px 40px -10px rgba(0, 0, 0, 0.6);
 }
 
 /* line-height nudge for CJK */

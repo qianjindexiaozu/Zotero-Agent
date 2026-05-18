@@ -87,6 +87,7 @@ Important UI decisions:
 - PDF tools are off by default and exposed from the chat controls.
 - PDF write actions must become proposal cards first; direct model-driven annotation mutation is not allowed.
 - The composer is locked while a proposal batch is pending.
+- Long-running requests show a persistent activity status above the composer so model/tool follow-up work is visible even when no new text is streaming.
 
 Do not convert this into a full replacement sidebar unless the product direction changes. The current strategy favors plugin-template compatibility and low blast radius inside Zotero.
 
@@ -118,6 +119,7 @@ Current provider behavior:
 - Falls back only for compatible/recoverable failures before output starts.
 - Does not fall back on invalid API keys.
 - Parses common streaming delta shapes.
+- Chat request timeout is idle-response based, not a fixed 60-second wall-clock cap; streaming progress should keep the request alive.
 - Sends reasoning effort when the selected model/provider declares support.
 
 Product rule: use the user's Base URL as the source of truth. Do not blindly append one fixed path to every provider. Many third-party gateways use different path rules.
@@ -168,7 +170,9 @@ Current tool behavior:
 - Default provider is DuckDuckGo Instant Answer with HTML-result fallback, plus optional SearXNG JSON endpoint support.
 - Search results are formatted as external context before the model request.
 - If a model emits a JSON action such as `{ "action": "联网搜索", "action_input": { "query": "..." } }`, Zotero-Cat parses the action, executes the registered tool when enabled, and sends one follow-up model request with the tool result. Do not let models execute tools directly.
+- Some OpenAI-compatible gateways emit XML-like tool-call markup such as `<tool_call><tool_name>read_pdf</tool_name>...</tool_call>` even without provider-native function calling. Zotero-Cat treats recognized tagged tool calls as tool actions and strips the markup from visible/persisted chat text.
 - If a model emits PDF read actions such as `read_pdf` or `list_annotations`, Zotero-Cat executes them only when PDF tools are enabled and sends one follow-up request with the tool result.
+- If a model says it will call/read/search/annotate but omits a machine-readable action, Zotero-Cat first infers safe read-only PDF/list-annotation actions when obvious, and otherwise performs one repair follow-up asking for an executable action instead of silently stopping. `read_pdf` supports page-scoped reads through fields such as `page`, `fromPage`, and `toPage`.
 - If a model emits PDF write actions such as `propose_annotation`, `modify_annotation`, or `delete_annotation`, Zotero-Cat converts them into proposal batches. Accepted proposals are applied through `Zotero.Annotations.saveFromJSON` or `Zotero.Item.eraseTx`.
 - Tool execution is owned by Zotero-Cat, not by provider-native function calling, so OpenAI-compatible gateways behave consistently.
 - Do not migrate wholesale to LangChain or LangGraph inside the Zotero plugin unless the complexity clearly justifies the dependency and runtime cost. Instead, evolve the internal tool runtime with LangGraph-style ideas: explicit state transitions, resumable steps where needed, deterministic tool ownership, and human-confirmation checkpoints before user-visible document changes.

@@ -24,6 +24,22 @@ the package metadata. Automated checks pass for the current Zotero 9 target.
 
 The plugin currently runs as a Zotero item-pane section through `ItemPaneManager.registerSection`. It does not replace Zotero's native right sidebar.
 
+## Main Branch After v0.1.2
+
+The main branch now contains experimental PDF tool agency work that is not yet
+promoted to a tagged public release. It is behind the `PDF tools` toggle and is
+intended for local validation before a `v0.2.0-alpha` decision.
+
+Current PDF tool work includes:
+
+- `read_pdf` and `list_annotations` tool actions.
+- `propose_annotation`, `modify_annotation`, and `delete_annotation` actions
+  converted into reviewable proposal cards.
+- Accept / Reject / Accept All / Reject All controls before Zotero annotations
+  are saved.
+- `pdfjs-dist` PDF text extraction with Zotero indexed-text fallback.
+- Zotero annotation create/update/delete wrappers and proposal-state tests.
+
 ## Implemented Features
 
 - Zotero right-pane `Zotero-Cat` section with icon and localized labels.
@@ -138,6 +154,7 @@ Zotero-Cat stores different data in different places:
 - Conversation history: Zotero pref `extensions.zotero.zoterocat.agentConversationStore`.
 - Provider, Base URL, selected model, reasoning effort, endpoint hints: Zotero prefs under `extensions.zotero.zoterocat.*`.
 - Web search toggle, search provider, and search endpoint: Zotero prefs under `extensions.zotero.zoterocat.*`.
+- PDF tools toggle and auto-apply setting: Zotero prefs under `extensions.zotero.zoterocat.*`.
 - API Key: Firefox Login Manager, scoped by provider and base URL.
 - Custom context: Zotero pref `extensions.zotero.zoterocat.customContextStore`, scoped by Zotero item key.
 
@@ -195,7 +212,12 @@ Zotero 10 beta compatibility is not declared until the manual checklist passes o
 - `src/modules/agent/types.ts`: Shared agent message types.
 - `src/modules/agent/toolAction.ts`: Tool action registry, parser, and execution dispatcher.
 - `src/modules/agent/webSearchContext.ts`: Web search context orchestration and tool handler registration.
+- `src/modules/agent/annotationTools.ts`: PDF read/write tool handler registration and annotation proposal resolution.
+- `src/modules/agent/annotationProposals.ts`: Annotation proposal state machine.
+- `src/modules/agent/proposalView.ts`: Annotation proposal review UI rendering.
 - `src/modules/tools/webSearch.ts`: DuckDuckGo/SearXNG search requests and result parsing.
+- `src/modules/tools/pdfReader.ts`: PDF text extraction and text-to-rect matching.
+- `src/modules/tools/pdfAnnotations.ts`: Zotero annotation persistence wrappers.
 - `src/modules/agent/promptTemplates.ts`: Prompt templates and localized system prompts.
 - `src/modules/agent/secureApiKey.ts`: Firefox Login Manager API Key storage.
 - `src/modules/preferenceScript.ts`: Preferences pane behavior.
@@ -214,10 +236,12 @@ Zotero 10 beta compatibility is not declared until the manual checklist passes o
 
 See [TODO.md](./TODO.md) for the detailed phase plan. A Chinese version is available at [TODO.zh-CN.md](./TODO.zh-CN.md).
 
-Post-0.1.1 hardening:
+Post-0.1.2 hardening:
 
+- Validate the experimental PDF tools on real Zotero 9 libraries before release.
 - Verify the latest Zotero beta if available.
 - Keep Zotero 9 manual checklist results current after user-visible UI changes.
+- Decide whether the next tag is `v0.2.0-alpha` or a narrower patch release.
 - Capture real installation screenshots for public release notes.
 
 ## Trademark And Non-Affiliation

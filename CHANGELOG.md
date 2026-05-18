@@ -5,6 +5,33 @@
 All notable project changes are tracked here. Zotero-Cat uses `0.x`
 versions until the first public stability commitment.
 
+## [Unreleased]
+
+### Added
+
+- Experimental PDF tool agency behind the `PDF tools` toggle, including
+  `read_pdf`, `list_annotations`, annotation proposal actions, proposal review
+  cards, and Zotero annotation create/update/delete wrappers.
+- Lazy `pdfjs-dist` PDF text extraction with Zotero indexed-text fallback.
+- Annotation proposal state machine and tests for proposal status transitions.
+- PDF text matching and annotation JSON helper tests.
+
+### Changed
+
+- Tool-action parsing can now return multiple actions per assistant turn, and
+  handlers declare whether they are read-only.
+- PDF highlight placement now keeps pdf.js text spans in PDF user coordinates
+  instead of flipping the Y axis, reducing misplaced highlights.
+- Annotation proposals without a reliable page hint now fail on ambiguous
+  multi-page matches instead of silently choosing the first occurrence.
+- The PDF tool auto-apply toggle now skips the pending confirmation card and
+  proceeds directly to applying accepted proposals.
+- Tool-call status messages use a compact inline state row instead of a dashed
+  card.
+- README, TODO, privacy notes, UI checklist, and implementation handoff docs
+  now distinguish the tagged `v0.1.2` release from post-release PDF-tool work
+  on main.
+
 ## [0.1.2] - 2026-05-10
 
 ### Changed

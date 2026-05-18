@@ -1,4 +1,5 @@
 import { assert } from "chai";
+import { annotationToolsTestUtils } from "../src/modules/agent/annotationTools";
 import { pdfReaderTestUtils } from "../src/modules/tools/pdfReader";
 import { pdfAnnotationsTestUtils } from "../src/modules/tools/pdfAnnotations";
 
@@ -54,6 +55,26 @@ describe("pdf tools logic", function () {
       assert.isNull(match);
     });
 
+    it("returns null for ambiguous matches without a target page", function () {
+      const pages = [0, 1].map((index) =>
+        makePage(index, 800, [
+          {
+            text: "shared phrase",
+            x: 0,
+            y: 100,
+            width: 90,
+            height: 10,
+          },
+        ]),
+      );
+      const match = pdfReaderTestUtils.findTextRects(
+        pages,
+        null,
+        "shared phrase",
+      );
+      assert.isNull(match);
+    });
+
     it("reorders search candidates by distance to target page", function () {
       const pages = [0, 1, 2, 3, 4].map((index) =>
         makePage(index, 800, [
@@ -79,7 +100,7 @@ describe("pdf tools logic", function () {
       ];
       const rects = pdfReaderTestUtils.mergeSpanRects(spans, 800);
       assert.equal(rects.length, 1);
-      assert.deepEqual(rects[0], [10, 590, 40, 600]);
+      assert.deepEqual(rects[0], [10, 200, 40, 210]);
     });
   });
 
@@ -127,6 +148,89 @@ describe("pdf tools logic", function () {
         [0, 0, 10, 10],
       ]);
       assert.match(sortIndex, /^\d{5}\|\d{6,7}\|\d{5}$/);
+    });
+
+    it("generates a key for new annotation json", function () {
+      const json = pdfAnnotationsTestUtils.buildAnnotationJSON(
+        {
+          type: "highlight",
+          pageIndex: 0,
+          pageLabel: "1",
+          rects: [[10, 100, 20, 110]],
+          text: "hello",
+        },
+        { libraryID: 1 } as Zotero.Item,
+      );
+      assert.match(json.key, /^[A-Z0-9]{8}$/);
+      assert.equal(json.id, json.key);
+    });
+
+    it("clamps valid rects to the PDF page bounds", function () {
+      const rects = pdfAnnotationsTestUtils.normalizeAnnotationRects(
+        [[-10, 100, 610, 112]],
+        600,
+        800,
+      );
+      assert.deepEqual(rects, [[0, 100, 600, 112]]);
+    });
+
+    it("rejects oversized rects that would block PDF clicks", function () {
+      const rects = pdfAnnotationsTestUtils.normalizeAnnotationRects(
+        [[0, 0, 600, 800]],
+        600,
+        800,
+      );
+      assert.deepEqual(rects, []);
+      assert.throws(() =>
+        pdfAnnotationsTestUtils.buildAnnotationJSON(
+          {
+            type: "highlight",
+            pageIndex: 0,
+            pageLabel: "1",
+            rects: [[0, 0, 600, 800]],
+            pageWidth: 600,
+            pageHeight: 800,
+            text: "bad",
+          },
+          { libraryID: 1 } as Zotero.Item,
+        ),
+      );
+    });
+  });
+
+  describe("pdf read tool page selection", function () {
+    it("parses continuation page requests", function () {
+      const request = annotationToolsTestUtils.resolveReadPdfPageRequest(
+        "继续读取第4页及以后的内容",
+        {},
+      );
+      assert.deepInclude(request, {
+        explicitRange: true,
+        fromIndex: 3,
+      });
+      assert.isUndefined(request.toIndex);
+    });
+
+    it("selects requested page ranges", function () {
+      const pages = [0, 1, 2, 3, 4].map((index) =>
+        makePage(index, 800, [
+          {
+            text: `page ${index + 1}`,
+            x: 0,
+            y: 100,
+            width: 80,
+            height: 10,
+          },
+        ]),
+      );
+      const selected = annotationToolsTestUtils.selectReadPdfPages(pages, {
+        explicitRange: true,
+        fromIndex: 3,
+      });
+      assert.deepEqual(
+        selected.map((page) => page.pageLabel),
+        ["4", "5"],
+      );
     });
   });
 });

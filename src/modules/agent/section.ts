@@ -53,7 +53,13 @@ import {
 import { createRuntimeID } from "./runtimeIds";
 import { getProviderApiKey } from "./secureApiKey";
 import { openAgentPreferences } from "../prefsPane";
-import { parseAssistantToolActions, executeToolAction } from "./toolAction";
+import {
+  parseAssistantToolActions,
+  executeToolAction,
+  inferAssistantReadOnlyToolAction,
+  looksLikeAssistantToolIntent,
+  stripAssistantToolActionMarkup,
+} from "./toolAction";
 import {
   isAnnotationWriteAction,
   isPdfToolsAutoApplyPref,
@@ -65,6 +71,7 @@ import {
   clearBatch,
   createBatch,
   getBatchForConversation,
+  getPendingApprovalKeys,
   hasPendingBatch,
   rejectAllPending,
   setProposalStatus,
@@ -122,6 +129,7 @@ interface AgentRuntime {
   activeConversationKeyByScope: Map<string, string>;
   conversationStoreLoaded: boolean;
   sending: boolean;
+  workingConversationKey: string | null;
   streamingAssistant: MessagePointer | null;
   waitingAssistant: MessagePointer | null;
   waitingStartedAt: number | null;
@@ -149,6 +157,7 @@ interface AgentRuntime {
   refreshers: Map<string, () => Promise<void>>;
   pendingToolFollowUp: Map<string, PendingToolFollowUp>;
   activeToolEventByKey: Map<string, number>;
+  approvedAnnotationOperationKeys: Set<string>;
 }
 
 interface PendingToolFollowUp {
@@ -165,6 +174,7 @@ const runtime: AgentRuntime = {
   activeConversationKeyByScope: new Map(),
   conversationStoreLoaded: false,
   sending: false,
+  workingConversationKey: null,
   streamingAssistant: null,
   waitingAssistant: null,
   waitingStartedAt: null,
@@ -192,6 +202,7 @@ const runtime: AgentRuntime = {
   refreshers: new Map(),
   pendingToolFollowUp: new Map(),
   activeToolEventByKey: new Map(),
+  approvedAnnotationOperationKeys: new Set(),
 };
 
 export function registerAgentSection() {
@@ -376,6 +387,14 @@ function renderSectionBody(body: HTMLDivElement, item: Zotero.Item) {
           void maybeApplyResolvedBatch(conversationKey);
         },
         onAcceptAll() {
+          acceptAllPending(conversationKey);
+          void applyBatchAndContinue(conversationKey, false);
+        },
+        onAlwaysAllow() {
+          const batch = getBatchForConversation(conversationKey);
+          if (batch) {
+            rememberAnnotationOperationApprovals(batch);
+          }
           acceptAllPending(conversationKey);
           void applyBatchAndContinue(conversationKey, false);
         },
@@ -692,6 +711,7 @@ function renderSectionBody(body: HTMLDivElement, item: Zotero.Item) {
       return;
     }
     runtime.sending = true;
+    startWorkingState(conversationKey);
     runtime.cancelRequested = false;
     runtime.cancelActiveRequest = null;
     runtime.requestToken += 1;
@@ -751,6 +771,7 @@ function renderSectionBody(body: HTMLDivElement, item: Zotero.Item) {
       stopWaitingAnimation();
       runtime.streamingAssistant = null;
       runtime.sending = false;
+      clearWorkingState(conversationKey);
       runtime.cancelRequested = false;
       runtime.cancelActiveRequest = null;
       runtime.activeToolEventByKey.delete(conversationKey);
@@ -767,12 +788,17 @@ function renderSectionBody(body: HTMLDivElement, item: Zotero.Item) {
   });
 
   composer.append(input, sendButton);
-  root.append(
+  const activityStatus = renderActivityStatus(doc, conversationKey);
+  const rootChildren: HTMLElement[] = [
     createSessionControls(doc, conversationScopeKey, conversation),
     messages,
     controls,
-    composer,
-  );
+  ];
+  if (activityStatus) {
+    rootChildren.push(activityStatus);
+  }
+  rootChildren.push(composer);
+  root.append(...rootChildren);
   body.replaceChildren(root);
   if (runtime.shouldAutoScroll || runtime.sending) {
     scrollToBottom(messages);
@@ -1013,6 +1039,9 @@ function appendToolEventMessage(
       },
     }) - 1;
   runtime.activeToolEventByKey.set(conversationKey, index);
+  if (runtime.sending) {
+    startWorkingState(conversationKey);
+  }
   touchConversationByKey(conversationKey);
   if (runtime.sending) {
     runtime.waitingToken += 1;
@@ -1073,6 +1102,9 @@ function appendAssistantContinuation(conversationKey: string): number {
     }) - 1;
   touchConversationByKey(conversationKey);
   runtime.streamingAssistant = null;
+  if (runtime.sending) {
+    startWorkingState(conversationKey);
+  }
   startWaitingAnimation(conversationKey, index);
   return index;
 }
@@ -1085,6 +1117,7 @@ async function continueAfterAssistantToolAction(
   reasoningEffort: ReasoningEffortValue,
   item: Zotero.Item | null,
   depth: number = 0,
+  repairedMissingToolAction: boolean = false,
 ) {
   if (depth >= MAX_TOOL_CHAIN_DEPTH) {
     await refreshAllSections();
@@ -1097,8 +1130,28 @@ async function continueAfterAssistantToolAction(
   if (!assistantMessage) {
     return;
   }
-  const actions = parseAssistantToolActions(assistantMessage.content);
+  const parsedActions = parseAssistantToolActions(assistantMessage.content);
+  const inferredAction = parsedActions.length
+    ? null
+    : inferAssistantReadOnlyToolAction(assistantMessage.content);
+  const actions = inferredAction ? [inferredAction] : parsedActions;
   if (!actions.length) {
+    if (
+      !repairedMissingToolAction &&
+      depth < MAX_TOOL_CHAIN_DEPTH - 1 &&
+      looksLikeAssistantToolIntent(assistantMessage.content)
+    ) {
+      await requestMissingToolActionRepair(
+        requestMessages,
+        conversationKey,
+        assistantMessageIndex,
+        requestToken,
+        reasoningEffort,
+        item,
+        depth,
+      );
+      return;
+    }
     // Final natural-language response — nothing more to do.
     await refreshAllSections();
     return;
@@ -1210,9 +1263,10 @@ async function continueAfterAssistantToolAction(
         readResults,
       });
       saveConversationStore();
-      await refreshAllSections();
-      if (isPdfToolsAutoApplyPref()) {
+      if (shouldAutoApplyAnnotationBatch(batch)) {
         await applyBatchAndContinue(batch.conversationKey, true);
+      } else {
+        await refreshAllSections();
       }
       return;
     }
@@ -1273,38 +1327,26 @@ async function continueAfterAssistantToolAction(
 }
 
 function stripToolActionJSON(content: string): string {
-  const withoutFenced = content.replace(
-    /```(?:json)?\s*([\s\S]*?)```/gi,
-    (match, inner) => {
-      const text = typeof inner === "string" ? inner.trim() : "";
-      if (!text) {
-        return match;
-      }
-      try {
-        const parsed = JSON.parse(text);
-        if (isActionRecord(parsed) || isActionArray(parsed)) {
-          return "";
-        }
-      } catch (_error) {
-        // Not JSON; keep the original block.
-      }
-      return match;
-    },
-  );
-  return withoutFenced.replace(/\n{3,}/g, "\n\n").trim();
+  return stripAssistantToolActionMarkup(content);
 }
 
-function isActionRecord(value: unknown): boolean {
+function shouldAutoApplyAnnotationBatch(batch: AnnotationBatch): boolean {
+  if (isPdfToolsAutoApplyPref()) {
+    return true;
+  }
+  const approvalKeys = getPendingApprovalKeys(batch);
   return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    "action" in (value as Record<string, unknown>)
+    approvalKeys.length > 0 &&
+    approvalKeys.every((key) =>
+      runtime.approvedAnnotationOperationKeys.has(key),
+    )
   );
 }
 
-function isActionArray(value: unknown): boolean {
-  return Array.isArray(value) && value.some((entry) => isActionRecord(entry));
+function rememberAnnotationOperationApprovals(batch: AnnotationBatch): void {
+  for (const key of getPendingApprovalKeys(batch)) {
+    runtime.approvedAnnotationOperationKeys.add(key);
+  }
 }
 
 async function maybeApplyResolvedBatch(conversationKey: string): Promise<void> {
@@ -1331,11 +1373,14 @@ async function applyBatchAndContinue(
   // false (manual apply triggered from batch UI) so kick the loop manually.
   const wasSending = runtime.sending;
   runtime.sending = true;
+  startWorkingState(conversationKey);
   const eventIndex = appendToolEventMessage(
     conversationKey,
     "applying-proposals",
   );
-  await refreshAllSections();
+  if (!autoAcceptAll) {
+    await refreshAllSections();
+  }
   const attachmentCache = new Map<number, Zotero.Item | null>();
   let applyFailures = 0;
   let lastApplyError = "";
@@ -1376,11 +1421,14 @@ async function applyBatchAndContinue(
     markToolEventDone(conversationKey, eventIndex);
   }
   saveConversationStore();
-  await refreshAllSections();
+  if (!autoAcceptAll) {
+    await refreshAllSections();
+  }
   if (!pending) {
     clearBatch(conversationKey);
     if (!wasSending) {
       runtime.sending = false;
+      clearWorkingState(conversationKey);
     }
     await refreshAllSections();
     return;
@@ -1422,12 +1470,83 @@ async function applyBatchAndContinue(
     if (requestToken === runtime.requestToken) {
       stopWaitingAnimation();
       runtime.sending = false;
+      clearWorkingState(conversationKey);
       runtime.cancelRequested = false;
       runtime.cancelActiveRequest = null;
       saveConversationStore();
       await refreshAllSections();
     }
   }
+}
+
+async function requestMissingToolActionRepair(
+  requestMessages: AgentMessage[],
+  conversationKey: string,
+  assistantMessageIndex: number,
+  requestToken: number,
+  reasoningEffort: ReasoningEffortValue,
+  item: Zotero.Item | null,
+  depth: number,
+): Promise<void> {
+  const assistantMessage = getConversationMessage(
+    conversationKey,
+    assistantMessageIndex,
+  );
+  if (!assistantMessage) {
+    return;
+  }
+  const continuationIndex = appendAssistantContinuation(conversationKey);
+  await refreshAllSections();
+  const followUpMessages = [
+    ...requestMessages,
+    { role: "assistant", content: assistantMessage.content } as AgentMessage,
+    {
+      role: "user",
+      content: buildMissingToolActionRepairPrompt(),
+    } as AgentMessage,
+  ];
+  await sendMessage(
+    followUpMessages,
+    conversationKey,
+    continuationIndex,
+    requestToken,
+    reasoningEffort,
+  );
+  if (requestToken !== runtime.requestToken || runtime.cancelRequested) {
+    return;
+  }
+  await continueAfterAssistantToolAction(
+    followUpMessages,
+    conversationKey,
+    continuationIndex,
+    requestToken,
+    reasoningEffort,
+    item,
+    depth + 1,
+    true,
+  );
+}
+
+function buildMissingToolActionRepairPrompt(): string {
+  const isZh = (Zotero.locale || "en").startsWith("zh");
+  if (isZh) {
+    return [
+      "你上一条回复表示要调用工具,但没有包含 Zotero-Cat 可执行的工具 action,所以插件无法继续。",
+      "如果确实需要工具,请只输出一个 JSON 代码块,不要再解释计划。",
+      '读取 PDF 全文: {"action":"read_pdf"}',
+      '从第 4 页开始读取: {"action":"read_pdf","action_input":{"fromPage":4}}',
+      '联网搜索: {"action":"联网搜索","action_input":{"query":"检索词"}}',
+      "如果不需要工具,请直接给出最终回答。",
+    ].join("\n");
+  }
+  return [
+    "Your previous response said you would use a tool, but it did not include an executable Zotero-Cat tool action.",
+    "If you need a tool, reply with only one JSON code block and no planning prose.",
+    'Read the full PDF: {"action":"read_pdf"}',
+    'Read from page 4 onward: {"action":"read_pdf","action_input":{"fromPage":4}}',
+    'Web search: {"action":"web_search","action_input":{"query":"search terms"}}',
+    "If no tool is needed, answer directly.",
+  ].join("\n");
 }
 
 async function applyProposal(
@@ -2260,6 +2379,7 @@ function clearConversationMessages(conversationKey: string) {
   }
   conversation.messages = [];
   runtime.activeToolEventByKey.delete(conversationKey);
+  clearWorkingState(conversationKey);
   touchConversation(conversation);
   saveConversationStore();
 }
@@ -2280,6 +2400,7 @@ function deleteConversation(scopeKey: string, conversationKey: string) {
   }
   runtime.conversationsByKey.delete(conversationKey);
   runtime.activeToolEventByKey.delete(conversationKey);
+  clearWorkingState(conversationKey);
   const nextConversation =
     getConversationsForScope(scopeKey).find(
       (candidate) => candidate.key !== conversationKey,
@@ -2358,6 +2479,16 @@ function requestCancel() {
   }
 }
 
+function startWorkingState(conversationKey: string) {
+  runtime.workingConversationKey = conversationKey;
+}
+
+function clearWorkingState(conversationKey: string) {
+  if (runtime.workingConversationKey === conversationKey) {
+    runtime.workingConversationKey = null;
+  }
+}
+
 function startWaitingAnimation(
   conversationKey: string,
   assistantMessageIndex: number,
@@ -2424,6 +2555,28 @@ function toProviderMessages(messages: RuntimeMessage[]): AgentMessage[] {
     }));
 }
 
+function renderActivityStatus(
+  doc: Document,
+  conversationKey: string,
+): HTMLElement | null {
+  if (!runtime.sending || runtime.workingConversationKey !== conversationKey) {
+    return null;
+  }
+
+  const status = doc.createElement("div");
+  status.className = "za-agent-activity-status";
+
+  const indicator = doc.createElement("span");
+  indicator.className = "za-agent-activity-indicator";
+
+  const label = doc.createElement("span");
+  label.className = "za-agent-activity-label";
+  label.textContent = getString("agent-working-label");
+
+  status.append(indicator, label);
+  return status;
+}
+
 function renderToolEventBubble(
   doc: Document,
   message: RuntimeMessage,
@@ -2434,11 +2587,18 @@ function renderToolEventBubble(
   }
   const toolKind = normalizeToolKind(event.toolType);
   const bubble = doc.createElement("div");
-  bubble.className = "za-agent-message za-agent-tool-event";
+  bubble.className = "za-agent-tool-event";
   bubble.classList.add(`za-agent-tool-event-${event.status}`);
 
-  const header = doc.createElement("div");
-  header.className = "za-agent-message-content za-agent-tool-event-header";
+  const row = doc.createElement("div");
+  row.className = "za-agent-tool-event-row";
+
+  const indicator = doc.createElement("span");
+  indicator.className = "za-agent-tool-event-indicator";
+  row.append(indicator);
+
+  const labelNode = doc.createElement("span");
+  labelNode.className = "za-agent-tool-event-label";
   let label: string;
   if (event.status === "running") {
     const base = getToolEventRunningLabel(toolKind).replace(/\.+$/, "");
@@ -2449,8 +2609,20 @@ function renderToolEventBubble(
   } else {
     label = getToolEventFailedLabel(toolKind);
   }
-  header.textContent = label;
-  bubble.append(header);
+  labelNode.textContent = label;
+  row.append(labelNode);
+
+  const elapsedMs =
+    event.status === "running"
+      ? Date.now() - event.startedAt
+      : (event.finishedAt ?? event.startedAt) - event.startedAt;
+  const meta = doc.createElement("span");
+  meta.className = "za-agent-tool-event-meta";
+  meta.textContent = getString("agent-tool-event-elapsed", {
+    args: { seconds: formatWaitSeconds(elapsedMs) },
+  });
+  row.append(meta);
+  bubble.append(row);
 
   if (event.status === "failed" && event.errorMessage) {
     const detail = doc.createElement("div");
@@ -2459,20 +2631,6 @@ function renderToolEventBubble(
     bubble.append(detail);
   }
 
-  const meta = doc.createElement("div");
-  meta.className = "za-agent-message-meta";
-  const parts = [formatMessageDateTime(message.createdAt)];
-  const elapsedMs =
-    event.status === "running"
-      ? Date.now() - event.startedAt
-      : (event.finishedAt ?? event.startedAt) - event.startedAt;
-  parts.push(
-    getString("agent-tool-event-elapsed", {
-      args: { seconds: formatWaitSeconds(elapsedMs) },
-    }),
-  );
-  meta.textContent = parts.join(" · ");
-  bubble.append(meta);
   return bubble;
 }
 

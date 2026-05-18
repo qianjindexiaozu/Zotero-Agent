@@ -18,6 +18,9 @@ Depending on enabled options, a request may include:
 - PDF annotations for the selected item.
 - Text recently selected in Zotero's PDF reader.
 - Custom context typed into the Zotero-Cat chat panel.
+- When PDF tools are enabled, extracted PDF text, existing annotation details,
+  and the summary of accepted/rejected annotation proposals may be sent to the
+  configured model provider as part of tool follow-up prompts.
 
 Disable context toggles before sending if a provider should not receive that
 data.
@@ -32,6 +35,18 @@ year. Returned search snippets and URLs are then injected into the model context
 Search-provider retention, logging, and deletion policies are controlled by the
 search provider you configure.
 
+## PDF Tool Access
+
+PDF tools are off by default. When enabled, Zotero-Cat may read the selected
+item's PDF attachment locally through `pdfjs-dist` or Zotero indexed full text,
+list existing Zotero annotations, and prepare annotation changes for review.
+Write operations are routed through Zotero-Cat proposal cards before Zotero
+annotation APIs are called.
+
+Accepted annotation proposals are saved inside the Zotero library as normal
+Zotero annotations. Rejected proposals are kept only in the in-memory proposal
+batch for the current session and are not saved as Zotero annotations.
+
 ## Local Data Storage
 
 Zotero-Cat stores:
@@ -41,6 +56,8 @@ Zotero-Cat stores:
 - Provider ID, Base URL, selected model, reasoning effort, and endpoint hints in
   Zotero prefs under `extensions.zotero.zoterocat.*`.
 - Web search enablement, provider ID, and endpoint in Zotero prefs under
+  `extensions.zotero.zoterocat.*`.
+- PDF tools enablement and auto-apply preference in Zotero prefs under
   `extensions.zotero.zoterocat.*`.
 - API Keys in Firefox Login Manager, scoped by provider and Base URL.
 - Per-item custom context in Zotero pref

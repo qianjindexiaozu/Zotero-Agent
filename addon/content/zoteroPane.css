@@ -74,34 +74,85 @@
   font-style: italic;
 }
 
-.za-agent-tool-event {
-  background: color-mix(in srgb, currentColor 5%, transparent);
-  border: 1px dashed color-mix(in srgb, currentColor 18%, transparent);
-  border-radius: 6px;
-  margin: 4px 0;
-  padding: 6px 10px;
+.za-agent-activity-status {
+  align-items: center;
+  color: color-mix(in srgb, currentColor 68%, transparent);
+  display: flex;
+  gap: 7px;
+  min-height: 20px;
+  padding: 0 2px;
 }
 
-.za-agent-tool-event-header {
-  font-size: 0.92em;
+.za-agent-activity-indicator {
+  animation: za-agent-pulse 1s ease-in-out infinite;
+  background: #2d7ff9;
+  border-radius: 999px;
+  flex: none;
+  height: 6px;
+  width: 6px;
+}
+
+.za-agent-activity-label {
+  font-size: 12px;
   font-weight: 500;
+  min-width: 0;
 }
 
-.za-agent-tool-event-running .za-agent-tool-event-header {
+.za-agent-tool-event {
+  align-self: stretch;
+  border-left: 2px solid color-mix(in srgb, currentColor 18%, transparent);
   color: color-mix(in srgb, currentColor 70%, transparent);
-  font-style: italic;
+  margin: 2px 0 2px 4px;
+  padding: 2px 0 2px 10px;
 }
 
-.za-agent-tool-event-done .za-agent-tool-event-header {
-  color: color-mix(in srgb, currentColor 80%, transparent);
+.za-agent-tool-event-row {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  min-height: 20px;
+}
+
+.za-agent-tool-event-indicator {
+  background: color-mix(in srgb, currentColor 40%, transparent);
+  border-radius: 999px;
+  flex: none;
+  height: 6px;
+  width: 6px;
+}
+
+.za-agent-tool-event-label {
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 0;
+}
+
+.za-agent-tool-event-meta {
+  color: color-mix(in srgb, currentColor 55%, transparent);
+  flex: none;
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.za-agent-tool-event-running .za-agent-tool-event-indicator {
+  animation: za-agent-pulse 1s ease-in-out infinite;
+  background: #2d7ff9;
+}
+
+.za-agent-tool-event-done .za-agent-tool-event-indicator {
+  background: #3a8e3a;
 }
 
 .za-agent-tool-event-failed {
-  background: color-mix(in srgb, #d94545 10%, transparent);
-  border-color: color-mix(in srgb, #d94545 35%, transparent);
+  border-left-color: color-mix(in srgb, #c54545 55%, transparent);
+  color: #c54545;
 }
 
-.za-agent-tool-event-failed .za-agent-tool-event-header {
+.za-agent-tool-event-failed .za-agent-tool-event-indicator {
+  background: #c54545;
+}
+
+.za-agent-tool-event-failed .za-agent-tool-event-label {
   color: #c33b3b;
 }
 
@@ -111,6 +162,19 @@
   margin-top: 2px;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+@keyframes za-agent-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
 }
 
 .za-agent-composer {
@@ -726,6 +790,7 @@
 
 .za-agent-proposal-batch-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -844,6 +909,7 @@
   color: #c54545;
 }
 
-.za-agent-proposal-accept-all {
+.za-agent-proposal-accept-all,
+.za-agent-proposal-always-allow {
   color: #3a8e3a;
 }

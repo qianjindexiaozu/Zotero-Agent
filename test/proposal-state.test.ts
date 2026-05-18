@@ -5,6 +5,8 @@ import {
   annotationProposalsTestUtils,
   clearBatch,
   createBatch,
+  getPendingApprovalKeys,
+  getProposalApprovalKey,
   getBatchForConversation,
   hasPendingBatch,
   rejectAllPending,
@@ -36,6 +38,17 @@ describe("annotation proposals state machine", function () {
     assert.equal(batch.proposals.length, 2);
     assert.equal(batch.proposals[0].status, "pending");
     assert.isTrue(hasPendingBatch("conv1"));
+  });
+
+  it("groups approval by operation and annotation type", function () {
+    const batch = createBatch("conv1", 3, [SAMPLE]);
+    assert.equal(
+      getProposalApprovalKey(batch.proposals[0]),
+      "create:highlight",
+    );
+    assert.deepEqual(getPendingApprovalKeys(batch), ["create:highlight"]);
+    acceptAllPending("conv1");
+    assert.deepEqual(getPendingApprovalKeys(batch), []);
   });
 
   it("caps proposals at the batch limit", function () {

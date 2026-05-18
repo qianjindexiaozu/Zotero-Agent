@@ -415,6 +415,23 @@ export function findTextRects(
   if (!normalizedQuery) {
     return null;
   }
+  if (
+    typeof targetPageIndex !== "number" ||
+    !Number.isFinite(targetPageIndex)
+  ) {
+    let found: ResolvedRects | null = null;
+    for (const page of pages) {
+      const match = matchPage(page, normalizedQuery);
+      if (!match) {
+        continue;
+      }
+      if (found) {
+        return null;
+      }
+      found = match;
+    }
+    return found;
+  }
   const candidateOrder = buildSearchOrder(pages, targetPageIndex);
   for (const page of candidateOrder) {
     const match = matchPage(page, normalizedQuery);
@@ -524,6 +541,7 @@ function mergeSpanRects(
   spans: ExtractedTextSpan[],
   pageHeight: number,
 ): number[][] {
+  void pageHeight;
   if (!spans.length) {
     return [];
   }
@@ -532,12 +550,14 @@ function mergeSpanRects(
     { x1: number; y1: number; x2: number; y2: number }
   >();
   for (const span of spans) {
-    const x1 = span.x;
-    const x2 = span.x + span.width;
-    // pdf.js exposes the baseline Y; convert to PDF user space where the
-    // origin sits at the bottom-left and rects run [x1, y1, x2, y2] with y2 > y1.
-    const y1 = pageHeight - (span.y + span.height);
-    const y2 = pageHeight - span.y;
+    // pdf.js text item transforms are already in PDF user space here. Zotero
+    // annotation rects also use PDF user space: [left, bottom, right, top].
+    // Do not flip Y. Flipping places highlights in the opposite vertical
+    // position, often over page margins or blank areas.
+    const x1 = Math.min(span.x, span.x + span.width);
+    const x2 = Math.max(span.x, span.x + span.width);
+    const y1 = Math.min(span.y, span.y + span.height);
+    const y2 = Math.max(span.y, span.y + span.height);
     const lineKey = Math.round(y1);
     const existing = rectsByLine.get(lineKey);
     if (!existing) {
@@ -786,6 +806,7 @@ export const pdfReaderTestUtils = {
   buildNormalizedIndex,
   matchPage,
   mergeSpanRects,
+  findTextRects,
   normalizeQuery,
   buildSearchOrder,
 };

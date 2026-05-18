@@ -12,6 +12,7 @@ export interface ProposalViewHandlers {
   onReject: (proposalID: string) => void;
   onAcceptAll: () => void;
   onRejectAll: () => void;
+  onAlwaysAllow: () => void;
 }
 
 export function renderProposalBatch(
@@ -52,13 +53,20 @@ export function renderProposalBatch(
   acceptAll.disabled = summary.pending === 0;
   acceptAll.addEventListener("click", () => handlers.onAcceptAll());
 
+  const alwaysAllow = doc.createElement("button");
+  alwaysAllow.className =
+    "za-agent-proposal-button za-agent-proposal-always-allow";
+  alwaysAllow.textContent = getString("agent-proposals-always-allow");
+  alwaysAllow.disabled = summary.pending === 0;
+  alwaysAllow.addEventListener("click", () => handlers.onAlwaysAllow());
+
   const rejectAll = doc.createElement("button");
   rejectAll.className = "za-agent-proposal-button za-agent-proposal-reject-all";
   rejectAll.textContent = getString("agent-proposals-reject-all");
   rejectAll.disabled = summary.pending === 0;
   rejectAll.addEventListener("click", () => handlers.onRejectAll());
 
-  batchActions.append(acceptAll, rejectAll);
+  batchActions.append(acceptAll, alwaysAllow, rejectAll);
   header.appendChild(batchActions);
   container.appendChild(header);
 

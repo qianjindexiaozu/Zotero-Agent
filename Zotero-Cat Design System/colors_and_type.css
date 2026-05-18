@@ -1,6 +1,6 @@
 /* Zotero-Cat Design System — Colors & Type tokens
-   Apple-leaning visual system: warm-paper light + deep-graphite dark,
-   single orange accent (cap tassel), Inter + JetBrains Mono.
+   Liquid-glass visual system: cool translucent surfaces + deep-graphite dark,
+   single sky-blue accent, Inter + JetBrains Mono.
    Source: Zotero-Cat-Web/src/styles/tokens.css (extended). */
 
 :root {
@@ -28,7 +28,7 @@
 
   /* ── Semantic (light, default) ───────────────────────── */
   --color-bg: var(--paper-1);
-  --color-surface: var(--paper-0);
+  --color-surface: rgba(255, 255, 255, 0.78);
   --color-surface-sunken: var(--paper-2);
   --color-fg: var(--ink-1);
   --color-fg-muted: var(--ink-3);
@@ -45,6 +45,38 @@
   --color-warning: #8a5a00;
   --color-danger: #8a1c1c;
   --color-link: var(--brand-blue-ink);
+
+  /* liquid glass material */
+  --glass-bg: rgba(255, 255, 255, 0.54);
+  --glass-bg-strong: rgba(255, 255, 255, 0.74);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.36);
+  --glass-border: rgba(255, 255, 255, 0.68);
+  --glass-border-strong: rgba(255, 255, 255, 0.92);
+  --glass-edge: rgba(61, 139, 255, 0.18);
+  --glass-highlight: rgba(255, 255, 255, 0.86);
+  --glass-filter: saturate(180%) blur(24px);
+  --glass-shadow:
+    0 18px 48px -28px rgba(31, 68, 128, 0.38),
+    0 2px 10px rgba(31, 68, 128, 0.08), inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 rgba(61, 139, 255, 0.08);
+  --glass-shadow-hover:
+    0 24px 64px -30px rgba(31, 68, 128, 0.48),
+    0 4px 16px rgba(31, 68, 128, 0.1), inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 rgba(61, 139, 255, 0.12);
+  --glass-rim: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.72),
+      rgba(255, 255, 255, 0.12)
+    )
+    border-box;
+  --page-glow:
+    linear-gradient(135deg, rgba(90, 163, 245, 0.16), transparent 34%),
+    linear-gradient(225deg, rgba(52, 199, 89, 0.1), transparent 38%),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.78),
+      rgba(238, 241, 247, 0.72)
+    );
 
   /* user / assistant chat bubbles (mirrors plugin runtime) */
   --bubble-user-bg: color-mix(in srgb, #2d7ff9 20%, transparent);
@@ -103,6 +135,7 @@
   --r-md: 10px;
   --r-lg: 14px;
   --r-xl: 20px;
+  --r-2xl: 28px;
   --r-pill: 999px;
 
   /* ── Shadows (soft, Apple-y) ─────────────────────────── */
@@ -134,7 +167,7 @@
 /* ── Dark mode ──────────────────────────────────────────── */
 [data-theme="dark"] {
   --color-bg: #0f0f12;
-  --color-surface: #15151a;
+  --color-surface: rgba(21, 21, 26, 0.78);
   --color-surface-sunken: #0a0a0e;
   --color-fg: #ececef;
   --color-fg-muted: #888892;
@@ -149,6 +182,30 @@
   --color-terminal-fg: #ececef;
   --color-link: #409cff;
   --bubble-assistant-bg: color-mix(in srgb, #ececef 10%, transparent);
+  --glass-bg: rgba(28, 28, 34, 0.5);
+  --glass-bg-strong: rgba(32, 32, 40, 0.72);
+  --glass-bg-subtle: rgba(24, 24, 30, 0.36);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-strong: rgba(255, 255, 255, 0.24);
+  --glass-edge: rgba(64, 156, 255, 0.26);
+  --glass-highlight: rgba(255, 255, 255, 0.12);
+  --glass-shadow:
+    0 20px 60px -32px rgba(0, 0, 0, 0.9), 0 4px 18px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 rgba(64, 156, 255, 0.1);
+  --glass-shadow-hover:
+    0 28px 72px -34px rgba(0, 0, 0, 0.95), 0 6px 22px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(64, 156, 255, 0.16);
+  --glass-rim: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.16),
+      rgba(255, 255, 255, 0.04)
+    )
+    border-box;
+  --page-glow:
+    linear-gradient(135deg, rgba(64, 156, 255, 0.2), transparent 34%),
+    linear-gradient(225deg, rgba(52, 199, 89, 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(15, 15, 18, 0.94), rgba(10, 10, 14, 0.96));
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-2: 0 4px 14px -4px rgba(0, 0, 0, 0.55);
   --shadow-3: 0 14px 40px -10px rgba(0, 0, 0, 0.6);
